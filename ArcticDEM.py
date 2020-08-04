@@ -53,8 +53,10 @@ def spatial_frequencies(shape, samp):
         sf.append(sf_dim)
     return tuple(sf)
 
-def _angle_meridian(geotrans):
+def _angle_meridian(proj, geotrans, eastwest=False):
+    assert proj == projdef
     assert geotrans[2] == geotrans[4] == 0
+    assert not eastwest
     xm = geotrans[0] + geotrans[1] * dem.shape[1] // 2
     ym = geotrans[3] + geotrans[5] * dem.shape[0] // 2
     ang = np.arctan2(-xm, -ym)
@@ -67,31 +69,45 @@ def _gaussian(sfreq, e_folding):
     p1 = (sfreq[1][np.newaxis, :] * e_folding) ** 2
     return np.exp(-(p0 + p1))
 
-def NS_slope_bp(dem, proj, geotrans, bp=(100, 2500), ang=None):
-    # bp are e-folding scales
-    assert proj == projdef
-    speczpc = fftshift(fft2(zero_pad(dem, pct=25)))
+def bandpass(dem, bp=(None, None), zppct=25.0, freqdomain=False):
+    speczpc = fftshift(fft2(zero_pad(dem, pct=zppct)))
     sfreq = spatial_frequencies(speczpc.shape, geotrans[1])
     spechpc, speclpc = np.ones_like(speczpc), np.ones_like(speczpc)
     if bp[1] is not None:
         spechpc -= _gaussian(sfreq, bp[1])
     if bp[0] is not None:
         speclpc *= _gaussian(sfreq, bp[0])
+    speczpc *= (spechpc * speclpc)
+    if freqdomain:
+        return speczpc, sfreq
+    else:
+        dem_ = np.real(ifft2(ifftshift(speczpc)))
+        dem_ = dem_[0:dem.shape[0], 0:dem.shape[1]].copy()
+        return dem_
+        
+def slope_bp(dem, proj, geotrans, bp=(100, 2500), ang=None, eastwest=False, zppct=25.0):
+    # bp are e-folding scales
     if ang is None:
-        ang = _angle_meridian(geotrans)
+        ang = _angle_meridian(proj, geotrans, eastwest=eastwest)
+    speczpc, sfreq = bandpass(dem, bp, zppct=zppct, freqdomain=True)
     specs = 2j * np.pi * (np.cos(ang) * sfreq[0][:, np.newaxis]
-                        -np.sin(ang) * sfreq[1][np.newaxis, :])
-    slopezp = np.real(ifft2(ifftshift(spechpc * speclpc * speczpc * specs)))
+                          -np.sin(ang) * sfreq[1][np.newaxis, :])
+    slopezp = np.real(ifft2(ifftshift(speczpc * specs)))
     slope = slopezp[0:dem.shape[0], 0:dem.shape[1]]
     return slope
 
-def slope_discrete(dem, proj, geotrans, ang=None):
+def slope_discrete_bp(
+        dem, proj, geotrans, bp=(None, None), ang=None, eastwest=False, zppct=25.0):
     if ang is None:
-        ang = _angle_meridian(geotrans)
-    nsloped1 = dem.copy()
+        ang = _angle_meridian(proj, geotrans, eastwest=eastwest)
+    if bp != (None, None):
+        dem_ = bandpass(dem, bp=bp, zppct=zppct)
+    else:
+        dem_ - dem
+    nsloped1 = dem_.copy()
     nsloped1[:-1, :] -= nsloped1[1:, :]
     nsloped1 /= geotrans[5]
-    nsloped2 = dem.copy()
+    nsloped2 = dem_.copy()
     nsloped2[:, :-1] -= nsloped2[:, 1:]
     nsloped2 /= geotrans[1]
     nsloped = np.cos(ang) * nsloped1 + np.sin(ang) * nsloped2
@@ -112,37 +128,38 @@ def inpaint_mask(dem, invalid=invalid):
     return dem, mask_slope
 
 if __name__ == '__main__':
-    tile = (52, 19)#(49, 20)
+    tile = (49, 20)#(52, 19)#(49, 20)
     dem, proj, geotrans = read_tile(tile=tile)
-    bp = (100, 1000)#3000 and larger have issues with large-scale slopes
+    bp = (100, 1000) # 3000 and larger have issues with large-scale slopes
     dem, mask_slope = inpaint_mask(dem)
-    ang = _angle_meridian(geotrans)
+    ang = _angle_meridian(proj, geotrans)
 #     ang = np.deg2rad(90)
 #     print(np.rad2deg(ang))
 #     dem = np.zeros((100, 100))
 #     dem[:, :] = 100 * np.real(np.exp(1j * (np.cos(ang) * np.arange(dem.shape[0])[:, np.newaxis] - np.sin(ang) * np.arange(dem.shape[1])[np.newaxis, :]) / 20))
-    nslope = NS_slope_bp(dem, proj, geotrans, bp=bp, ang=ang)
+    nslope = slope_bp(dem, proj, geotrans, bp=bp, ang=ang)
     nslope[mask_slope] = np.nan
-    nslope
+
+    nsloped = slope_discrete_bp(dem, proj, geotrans, ang=ang, bp=bp)
+    nsloped[mask_slope] = np.nan
+
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(ncols=3)
     ax[0].imshow(dem)
     vlim = 0.3
     ax[1].imshow(nslope, vmin=-vlim, vmax=vlim, cmap='bwr')
-    nsloped = slope_discrete(dem, proj, geotrans, ang=ang)
-    nsloped[mask_slope] = np.nan
-
-    print(np.nanpercentile(nslope, 75), np.nanpercentile(nsloped, 75))
+    ax[2].imshow(nsloped, vmin=-vlim, vmax=vlim, cmap='bwr')
 
 #     nslopew = nslope[1700:2400, 1250:2500]
-    nslopew = nslope[1000:-1000, 1000:-1000]
+    for nslope_ in (nslope, nsloped):
+        nslopew = nslope_[1000:-1000, 1000:-1000]
+        slopep = np.nanpercentile(nslopew, (25, 50, 75))
+        print(100 * slopep[1] / (slopep[2] - slopep[0]), slopep, np.nanmean(nslopew))
 
-    slopesum = np.nanpercentile(nslopew, (25, 50, 75))
-    print(slopesum, np.nanmean(nslopew))
-    print(100 * slopesum[1] / (slopesum[2] - slopesum[0]))
 
-    ax[2].imshow(nsloped, vmin=-vlim, vmax=vlim, cmap='bwr')
     plt.show()
+
+    # to do: test EW, aspect, aspect mask
 
 #     src = osr.SpatialReference()
 #     tgt = osr.SpatialReference()
