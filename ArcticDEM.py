@@ -8,7 +8,7 @@ import os
 from osgeo import gdal, osr
 import numpy as np
 from numpy.fft import fftshift, ifftshift, fft2, ifft2
-
+import warnings
 versiondef = '3.0'
 resdef = '32m'
 invalid = -9999.0,
@@ -38,8 +38,9 @@ def read_tile(tile=(52, 19), path=pathADEM, res=resdef, version=versiondef):
     return dem, proj, geotrans
 
 def zero_pad(arr, pct=25):
-    shapeout = (np.array(arr.shape) * (1 + pct / 100)).astype(np.uint32)
-    shapeout = tuple(shapeout + np.mod(shapeout, 2))
+    shapeout = (np.array(arr.shape) * (1 + pct / 100))
+    shapeout = 2 ** (np.floor(np.log2(shapeout)) + 1)
+    shapeout = tuple(shapeout.astype(np.uint32))
     arr_zp = np.zeros(shapeout, dtype=arr.dtype)
     arr_zp[0:arr.shape[0], 0:arr.shape[1]] = arr
     return arr_zp
@@ -84,16 +85,16 @@ def bandpass(dem, bp=(None, None), zppct=25.0, freqdomain=False):
         dem_ = np.real(ifft2(ifftshift(speczpc)))
         dem_ = dem_[0:dem.shape[0], 0:dem.shape[1]].copy()
         return dem_
-        
-def slope_bp(dem, proj, geotrans, bp=(100, 2500), ang=None,zppct=25.0):
+
+def slope_bp(dem, proj, geotrans, bp=(100, 2500), ang=None, zppct=25.0):
     if ang is None:
         ang = _angle_meridian(proj, geotrans)
     speczpc, sfreq = bandpass(dem, bp, zppct=zppct, freqdomain=True)
     specs = np.stack((
         (np.cos(ang) * sfreq[0][:, np.newaxis] - np.sin(ang) * sfreq[1][np.newaxis, :]),
-        (-np.sin(ang) * sfreq[0][:, np.newaxis] + np.cos(ang) * sfreq[1][np.newaxis, :])), 
+        (-np.sin(ang) * sfreq[0][:, np.newaxis] + np.cos(ang) * sfreq[1][np.newaxis, :])),
         axis=0).astype(np.complex128)
-    specs *= 2j * np.pi 
+    specs *= 2j * np.pi
     slopezp = np.real(
         ifft2(ifftshift(speczpc[np.newaxis, ...] * specs, axes=(1, 2)), axes=(1, 2)))
     slope = slopezp[:, 0:dem.shape[0], 0:dem.shape[1]]
@@ -116,7 +117,30 @@ def slope_discrete_bp(
     nsloped = np.cos(ang) * sloped1 + np.sin(ang) * sloped2
     esloped = -np.sin(ang) * sloped1 + np.cos(ang) * sloped2
     return np.stack((nsloped, esloped), axis=0)
-    
+
+def _median_asymindex(slope):
+    slopep = np.nanpercentile(slope[0, ...], (25, 50, 75))
+    asymi = -100 * slopep[1] / (slopep[2] - slopep[0])  # pos: N facing steeper
+    return asymi
+
+def _logratio_asymindex(slope, minslope=0.05, aspthresh=1):
+    slope_ = np.reshape(slope.copy(), (slope.shape[0], -1))
+    slope_abs = np.sqrt(np.sum(slope_ ** 2, axis=0))
+    asp = slope_[0] / np.abs(slope_[1])
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        slope_abs_n = slope_abs[np.logical_and(asp >= aspthresh, slope_abs >= minslope)]
+        slope_abs_s = slope_abs[np.logical_and(asp <= -aspthresh, slope_abs >= minslope)]
+    asymi = np.log10(np.median(slope_abs_n) / np.median(slope_abs_s))
+    return asymi
+
+def asymindex(slope, indtype='median', **kwargs):
+    if indtype == 'median':
+        asymi = _median_asymindex(slope)
+    elif indtype == 'logratio':
+        asymi = _logratio_asymindex(slope, **kwargs)
+    return asymi
+
 def inpaint_mask(dem, invalid=invalid):
     # to do: use opencv inpainting; reasonable length scales
     dem[dem <= invalid] = np.nan  # improve infilling
@@ -132,15 +156,16 @@ def inpaint_mask(dem, invalid=invalid):
     return dem, mask_slope
 
 if __name__ == '__main__':
-    tile = (52, 19)#(49, 20)
+    tile = (49, 20)  # (52, 19)  # (49, 20)
     dem, proj, geotrans = read_tile(tile=tile)
-    bp = (100, 1000) # 3000 and larger have issues with large-scale slopes
-    dem, mask_slope = inpaint_mask(dem)
+    bp = (100, 2000)  # 3000 and larger have issues with large-scale slopes
     ang = _angle_meridian(proj, geotrans)
+
 #     ang = np.deg2rad(90)
-#     print(np.rad2deg(ang))
-#     dem = np.zeros((100, 100))
+#     dem = np.zeros((4096, 4096))
 #     dem[:, :] = 100 * np.real(np.exp(1j * (np.cos(ang) * np.arange(dem.shape[0])[:, np.newaxis] - np.sin(ang) * np.arange(dem.shape[1])[np.newaxis, :]) / 20))
+
+    dem, mask_slope = inpaint_mask(dem)
     slope = slope_bp(dem, proj, geotrans, bp=bp, ang=ang)
     slope[:, mask_slope] = np.nan
 
@@ -149,6 +174,7 @@ if __name__ == '__main__':
 
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(ncols=3)
+#     dem = bandpass(dem, bp=bp)
     ax[0].imshow(dem)
     vlim = 0.3
     ax[1].imshow(slope[0, ...], vmin=-vlim, vmax=vlim, cmap='bwr')
@@ -156,10 +182,9 @@ if __name__ == '__main__':
 
 #     nslopew = nslope[1700:2400, 1250:2500]
     for slope_ in (slope, sloped):
-        nslopew = slope_[0:, 1000:-1000, 1000:-1000]
-        slopep = np.nanpercentile(nslopew, (25, 50, 75))
-        print(100 * slopep[1] / (slopep[2] - slopep[0]), slopep, np.nanmean(nslopew))
-
+        slopew = slope_[:, 1000:-1000, 1000:-1000]
+        print(asymindex(slopew), asymindex(slopew, indtype='logratio'))
+        print(np.nanmean(slopew[0, ...]))  # also store the mean/median
 
     plt.show()
 
