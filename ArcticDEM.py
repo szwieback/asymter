@@ -9,6 +9,10 @@ from osgeo import gdal, osr
 import numpy as np
 from numpy.fft import fftshift, ifftshift, fft2, ifft2
 import warnings
+
+from IO import read_gdal, Geospatial
+from watermask import match_watermask
+
 versiondef = '3.0'
 resdef = '32m'
 invalid = -9999.0,
@@ -23,13 +27,6 @@ projdef = (
     'PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]]]')
 lonoffset = float(projdef[projdef.rindex('central_meridian') + 18:].split(']')[0])
 pathADEM = '/home/simon/Work/asymter/ArcticDEM/32m'
-
-def read_gdal(fntif):
-    f = gdal.Open(fntif, gdal.GA_ReadOnly)
-    im = f.ReadAsArray()
-    proj = f.GetProjection()
-    geotrans = f.GetGeoTransform()
-    return im, proj, geotrans
 
 def read_tile(tile=(52, 19), path=pathADEM, res=resdef, version=versiondef):
     tilestr = f'{tile[0]}_{tile[1]}_{res}_v{version}'
@@ -150,27 +147,32 @@ def inpaint_mask(dem, invalid=invalid):
     mask = np.isnan(dem)
     l_int = bp[1] if bp[1] is not None else 3 * bp[0]
     selem = generate_binary_structure(2, 1)
-    mask_slope = binary_dilation(
+    mask = binary_dilation(
         mask, selem, iterations=int(np.abs(l_int / geotrans[1])))
     dem[mask] = np.nanmedian(dem)
-    return dem, mask_slope
+    return dem, mask
 
 if __name__ == '__main__':
-    tile = (49, 20)  # (52, 19)  # (49, 20)
+    tile = (40, 17)  # (52, 19)  # (49, 20)
     dem, proj, geotrans = read_tile(tile=tile)
     bp = (100, 2000)  # 3000 and larger have issues with large-scale slopes
+    buffer = 2 * bp[0]
     ang = _angle_meridian(proj, geotrans)
 
 #     ang = np.deg2rad(90)
 #     dem = np.zeros((4096, 4096))
 #     dem[:, :] = 100 * np.real(np.exp(1j * (np.cos(ang) * np.arange(dem.shape[0])[:, np.newaxis] - np.sin(ang) * np.arange(dem.shape[1])[np.newaxis, :]) / 20))
 
-    dem, mask_slope = inpaint_mask(dem)
+    dem, mask_gap = inpaint_mask(dem)
+    geospatial = Geospatial(shape=dem.shape, proj=proj, geotrans=geotrans)
+    mask_water = match_watermask(geospatial, cutoffpct=5.0, buffer=buffer)
+    mask = np.logical_or(mask_water, mask_gap)
+
     slope = slope_bp(dem, proj, geotrans, bp=bp, ang=ang)
-    slope[:, mask_slope] = np.nan
+    slope[:, mask] = np.nan
 
     sloped = slope_discrete_bp(dem, proj, geotrans, ang=ang, bp=bp)
-    sloped[:, mask_slope] = np.nan
+    sloped[:, mask] = np.nan
 
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(ncols=3)
@@ -184,8 +186,8 @@ if __name__ == '__main__':
     for slope_ in (slope, sloped):
         slopew = slope_[:, 1000:-1000, 1000:-1000]
         print(asymindex(slopew), asymindex(slopew, indtype='logratio'))
-        print(np.nanmean(slopew[0, ...]))  # also store the mean/median
-
+        print(np.nanmean(slopew[0, ...]), np.nanpercentile(slopew[0, ...], (25, 50, 75)))  # also store the mean/median
+    # do scatterplot comparison
     plt.show()
 
     # to do: test EW, aspect, aspect mask
