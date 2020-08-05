@@ -8,12 +8,12 @@ import os
 from osgeo import gdal, osr
 import numpy as np
 from numpy.fft import fftshift, ifftshift, fft2, ifft2
-import warnings
+from urllib.parse import urljoin
 
 from IO import read_gdal, Geospatial
 from watermask import match_watermask
 
-versiondef = '3.0'
+versiondef = 'v3.0'
 resdef = '32m'
 invalid = -9999.0,
 # proj corresponds to EPSG 3413
@@ -29,7 +29,7 @@ lonoffset = float(projdef[projdef.rindex('central_meridian') + 18:].split(']')[0
 pathADEM = '/home/simon/Work/asymter/ArcticDEM/32m'
 
 def read_tile(tile=(52, 19), path=pathADEM, res=resdef, version=versiondef):
-    tilestr = f'{tile[0]}_{tile[1]}_{res}_v{version}'
+    tilestr = f'{tile[0]}_{tile[1]}_{res}_{version}'
     fntif = os.path.join(path, tilestr, tilestr + '_reg_dem.tif')
     dem, proj, geotrans = read_gdal(fntif)
     return dem, proj, geotrans
@@ -51,7 +51,7 @@ def spatial_frequencies(shape, samp):
         sf.append(sf_dim)
     return tuple(sf)
 
-def _angle_meridian(proj, geotrans):
+def _angle_meridian(dem, proj, geotrans):
     assert proj == projdef
     assert geotrans[2] == geotrans[4] == 0
     xm = geotrans[0] + geotrans[1] * dem.shape[1] // 2
@@ -66,7 +66,7 @@ def _gaussian(sfreq, e_folding):
     p1 = (sfreq[1][np.newaxis, :] * e_folding) ** 2
     return np.exp(-(p0 + p1))
 
-def bandpass(dem, bp=(None, None), zppct=25.0, freqdomain=False):
+def bandpass(dem, geotrans, bp=(None, None), zppct=25.0, freqdomain=False):
     # bp are e-folding half scales
     speczpc = fftshift(fft2(zero_pad(dem, pct=zppct)))
     sfreq = spatial_frequencies(speczpc.shape, geotrans[1])
@@ -85,7 +85,7 @@ def bandpass(dem, bp=(None, None), zppct=25.0, freqdomain=False):
 
 def slope_bp(dem, proj, geotrans, bp=(100, 2500), ang=None, zppct=25.0):
     if ang is None:
-        ang = _angle_meridian(proj, geotrans)
+        ang = _angle_meridian(dem, proj, geotrans)
     speczpc, sfreq = bandpass(dem, bp, zppct=zppct, freqdomain=True)
     specs = np.stack((
         (np.cos(ang) * sfreq[0][:, np.newaxis] - np.sin(ang) * sfreq[1][np.newaxis, :]),
@@ -100,9 +100,9 @@ def slope_bp(dem, proj, geotrans, bp=(100, 2500), ang=None, zppct=25.0):
 def slope_discrete_bp(
         dem, proj, geotrans, bp=(None, None), ang=None, zppct=25.0):
     if ang is None:
-        ang = _angle_meridian(proj, geotrans)
+        ang = _angle_meridian(dem, proj, geotrans)
     if bp != (None, None):
-        dem_ = bandpass(dem, bp=bp, zppct=zppct)
+        dem_ = bandpass(dem, geotrans, bp=bp, zppct=zppct)
     else:
         dem_ - dem
     sloped1 = dem_.copy()
@@ -121,6 +121,7 @@ def _median_asymindex(slope):
     return asymi
 
 def _logratio_asymindex(slope, minslope=0.05, aspthresh=1):
+    import warnings
     slope_ = np.reshape(slope.copy(), (slope.shape[0], -1))
     slope_abs = np.sqrt(np.sum(slope_ ** 2, axis=0))
     asp = slope_[0] / np.abs(slope_[1])
@@ -138,7 +139,7 @@ def asymindex(slope, indtype='median', **kwargs):
         asymi = _logratio_asymindex(slope, **kwargs)
     return asymi
 
-def inpaint_mask(dem, invalid=invalid):
+def inpaint_mask(dem, geotrans, bp=(100, 1000), invalid=invalid):
     # to do: use opencv inpainting; reasonable length scales
     dem[dem <= invalid] = np.nan  # improve infilling
     from scipy.ndimage import median_filter, binary_dilation, generate_binary_structure
@@ -152,18 +153,19 @@ def inpaint_mask(dem, invalid=invalid):
     dem[mask] = np.nanmedian(dem)
     return dem, mask
 
-if __name__ == '__main__':
-    tile = (40, 17)  # (52, 19)  # (49, 20)
-    dem, proj, geotrans = read_tile(tile=tile)
+def test_asymter():
+    tile = (52, 19)  # (40, 17)  # (49, 20)
     bp = (100, 2000)  # 3000 and larger have issues with large-scale slopes
     buffer = 2 * bp[0]
-    ang = _angle_meridian(proj, geotrans)
+
+    dem, proj, geotrans = read_tile(tile=tile)
+    ang = _angle_meridian(dem, proj, geotrans)
 
 #     ang = np.deg2rad(90)
 #     dem = np.zeros((4096, 4096))
 #     dem[:, :] = 100 * np.real(np.exp(1j * (np.cos(ang) * np.arange(dem.shape[0])[:, np.newaxis] - np.sin(ang) * np.arange(dem.shape[1])[np.newaxis, :]) / 20))
 
-    dem, mask_gap = inpaint_mask(dem)
+    dem, mask_gap = inpaint_mask(dem, geotrans, bp=bp)
     geospatial = Geospatial(shape=dem.shape, proj=proj, geotrans=geotrans)
     mask_water = match_watermask(geospatial, cutoffpct=5.0, buffer=buffer)
     mask = np.logical_or(mask_water, mask_gap)
@@ -176,7 +178,7 @@ if __name__ == '__main__':
 
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(ncols=3)
-#     dem = bandpass(dem, bp=bp)
+#     dem = bandpass(dem, geotrans, bp=bp)
     ax[0].imshow(dem)
     vlim = 0.3
     ax[1].imshow(slope[0, ...], vmin=-vlim, vmax=vlim, cmap='bwr')
@@ -190,7 +192,31 @@ if __name__ == '__main__':
     # do scatterplot comparison
     plt.show()
 
-    # to do: test EW, aspect, aspect mask
+def download_tile(
+        tile=(50, 19), path=pathADEM, res=resdef, version=versiondef, overwrite=False):
+    import tarfile, requests
+
+    absurl = 'http://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/mosaic/'
+    tilestr = f'{tile[0]}_{tile[1]}_{res}_{version}'
+    resurl = f'{version}/{res}/{tile[0]}_{tile[1]}/{tilestr}.tar.gz'
+    fnlocal = os.path.join(path, f'{tilestr}.tar.gz')
+    pathtile = os.path.join(path, tilestr)
+    if overwrite or not os.path.exists(pathtile):
+        url = urljoin(absurl, resurl)
+        response = requests.get(url)
+        if response.status_code != 404:
+            with open(fnlocal, 'wb') as f:
+                f.write(response.content)
+            try:
+                with tarfile.open(fnlocal, 'r:gz') as tar:
+                    tar.extractall(pathtile)
+                    if os.path.exists(fnlocal):
+                        os.remove(fnlocal)
+            except:
+                print(f'Could not download {url}')
+
+if __name__ == '__main__':
+    test_asymter()
 
 #     src = osr.SpatialReference()
 #     tgt = osr.SpatialReference()

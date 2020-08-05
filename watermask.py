@@ -9,6 +9,7 @@ import os
 import itertools
 from osgeo import gdal
 import numpy as np
+from urllib.parse import urljoin
 
 from IO import resample_gdal, read_gdal
 
@@ -24,7 +25,7 @@ def download_single(
     fn = pattern[1].format(*tile)
     fnlocal = os.path.join(pathlocal, fn)
     if overwrite or not os.path.exists(fnlocal):
-        url = f'{url0}/{pattern[0]}/{fn}'
+        url = urljoin(url0, f'{pattern[0]}/{fn}')
         response = requests.get(url)
         with open(fnlocal, 'wb') as f:
             f.write(response.content)
