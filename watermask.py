@@ -9,14 +9,13 @@ import os
 import itertools
 from osgeo import gdal
 import numpy as np
-from urllib.parse import urljoin
 
 from IO import resample_gdal, read_gdal
+from paths import pathwm
 
-pathwm = '/home/simon/Work/asymter/watermask'
 pathwmmerged = os.path.join(pathwm, 'merged')
 patterndef = ('occurrence', 'occurrence_{0}_{1}v1_1_2019.tif')
-url0 = 'https://storage.googleapis.com/global-surface-water/downloads2019v2'
+url0 = 'https://storage.googleapis.com/global-surface-water/downloads2019v2/'
 if not os.path.exists(pathwmmerged): os.makedirs(pathwmmerged)
 fnvrt = os.path.join(pathwmmerged, 'merged.vrt')
 
@@ -25,7 +24,7 @@ def download_single(
     fn = pattern[1].format(*tile)
     fnlocal = os.path.join(pathlocal, fn)
     if overwrite or not os.path.exists(fnlocal):
-        url = urljoin(url0, f'{pattern[0]}/{fn}')
+        url = url0 + f'{pattern[0]}/{fn}'
         response = requests.get(url)
         with open(fnlocal, 'wb') as f:
             f.write(response.content)
@@ -59,6 +58,6 @@ def match_watermask(geospatial, fnvrt=fnvrt, cutoffpct=5.0, buffer=100):
 
 if __name__ == '__main__':
 #     download_Arctic()
-#     panArctic_virtual()
-    pass
+    panArctic_virtual()
+#     pass
 

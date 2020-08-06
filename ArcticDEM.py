@@ -5,17 +5,15 @@ Created on Aug 2, 2020
 '''
 
 import os
-from osgeo import gdal, osr
+from osgeo import gdal
 import numpy as np
-from numpy.fft import fftshift, ifftshift, fft2, ifft2
-from urllib.parse import urljoin
 
-from IO import read_gdal, Geospatial
-from watermask import match_watermask
+from paths import pathADEM
+from IO import read_gdal, Geospatial, resample_gdal
 
-versiondef = 'v3.0'
-resdef = '32m'
-invalid = -9999.0,
+ADEMversiondef = 'v3.0'
+ADEMresdef = '32m'
+ADEMinvalid = -9999.0,
 # proj corresponds to EPSG 3413
 projdef = (
     'PROJCS["unnamed",GEOGCS["WGS 84",DATUM["WGS_1984",'
@@ -26,186 +24,65 @@ projdef = (
     'PARAMETER["scale_factor",1],PARAMETER["false_easting",0],'
     'PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]]]')
 lonoffset = float(projdef[projdef.rindex('central_meridian') + 18:].split(']')[0])
-pathADEM = '/home/simon/Work/asymter/ArcticDEM/32m'
+absurl = 'http://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/mosaic/'
 
-def read_tile(tile=(52, 19), path=pathADEM, res=resdef, version=versiondef):
+def filename_ADEM(tile=(52, 19), path=pathADEM, res=ADEMresdef, version=ADEMversiondef):
     tilestr = f'{tile[0]}_{tile[1]}_{res}_{version}'
-    fntif = os.path.join(path, tilestr, tilestr + '_reg_dem.tif')
+    fntif = os.path.join(path, res, tilestr, tilestr + '_reg_dem.tif')
+    return fntif
+
+def read_tile(tile=(52, 19), path=pathADEM, res=ADEMresdef, version=ADEMversiondef):
+    fntif = filename_ADEM(tile=tile, path=path, res=res, version=version)
     dem, proj, geotrans = read_gdal(fntif)
     return dem, proj, geotrans
 
-def zero_pad(arr, pct=25):
-    shapeout = (np.array(arr.shape) * (1 + pct / 100))
-    shapeout = 2 ** (np.floor(np.log2(shapeout)) + 1)
-    shapeout = tuple(shapeout.astype(np.uint32))
-    arr_zp = np.zeros(shapeout, dtype=arr.dtype)
-    arr_zp[0:arr.shape[0], 0:arr.shape[1]] = arr
-    return arr_zp
+def tile_virtual_raster(
+        tiles, fnvrt, path=pathADEM, res=ADEMresdef, version=ADEMversiondef):
+    inputtif = [
+        filename_ADEM(tile=tile, path=path, res=res, version=version) for tile in tiles]
+    gdal.BuildVRT(fnvrt, [fntif for fntif in inputtif if os.path.exists(fntif)],
+                  VRTNodata=np.nan)
 
-def spatial_frequencies(shape, samp):
-    sf = []
-    for n_samples in shape:
-        if np.mod(n_samples, 2) != 0: raise NotImplementedError('odd samples')
-        sf_dim = np.arange(-n_samples // 2, n_samples // 2) / (n_samples * samp)
-        assert(len(sf_dim) == n_samples)
-        sf.append(sf_dim)
-    return tuple(sf)
-
-def _angle_meridian(dem, proj, geotrans):
-    assert proj == projdef
+def read_tile_buffer(
+        tile=(52, 19), buffer=2e4, path=pathADEM, res=ADEMresdef, version=ADEMversiondef):
+    from itertools import product
+    dem_, proj, geotrans = read_tile(tile=tile, path=path, res=res, version=version)
+    # determine coords
     assert geotrans[2] == geotrans[4] == 0
-    xm = geotrans[0] + geotrans[1] * dem.shape[1] // 2
-    ym = geotrans[3] + geotrans[5] * dem.shape[0] // 2
-    ang = np.arctan2(-xm, -ym)
-    return ang
-
-def _gaussian(sfreq, e_folding):
-    # e_folding is given as length/period rather than frequency
-    assert len(sfreq) == 2
-    p0 = (sfreq[0][:, np.newaxis] * e_folding) ** 2
-    p1 = (sfreq[1][np.newaxis, :] * e_folding) ** 2
-    return np.exp(-(p0 + p1))
-
-def bandpass(dem, geotrans, bp=(None, None), zppct=25.0, freqdomain=False):
-    # bp are e-folding half scales
-    speczpc = fftshift(fft2(zero_pad(dem, pct=zppct)))
-    sfreq = spatial_frequencies(speczpc.shape, geotrans[1])
-    spechpc, speclpc = np.ones_like(speczpc), np.ones_like(speczpc)
-    if bp[1] is not None:
-        spechpc -= _gaussian(sfreq, bp[1])
-    if bp[0] is not None:
-        speclpc *= _gaussian(sfreq, bp[0])
-    speczpc *= (spechpc * speclpc)
-    if freqdomain:
-        return speczpc, sfreq
-    else:
-        dem_ = np.real(ifft2(ifftshift(speczpc)))
-        dem_ = dem_[0:dem.shape[0], 0:dem.shape[1]].copy()
-        return dem_
-
-def slope_bp(dem, proj, geotrans, bp=(100, 2500), ang=None, zppct=25.0):
-    if ang is None:
-        ang = _angle_meridian(dem, proj, geotrans)
-    speczpc, sfreq = bandpass(dem, bp, zppct=zppct, freqdomain=True)
-    specs = np.stack((
-        (np.cos(ang) * sfreq[0][:, np.newaxis] - np.sin(ang) * sfreq[1][np.newaxis, :]),
-        (-np.sin(ang) * sfreq[0][:, np.newaxis] + np.cos(ang) * sfreq[1][np.newaxis, :])),
-        axis=0).astype(np.complex128)
-    specs *= 2j * np.pi
-    slopezp = np.real(
-        ifft2(ifftshift(speczpc[np.newaxis, ...] * specs, axes=(1, 2)), axes=(1, 2)))
-    slope = slopezp[:, 0:dem.shape[0], 0:dem.shape[1]]
-    return slope
-
-def slope_discrete_bp(
-        dem, proj, geotrans, bp=(None, None), ang=None, zppct=25.0):
-    if ang is None:
-        ang = _angle_meridian(dem, proj, geotrans)
-    if bp != (None, None):
-        dem_ = bandpass(dem, geotrans, bp=bp, zppct=zppct)
-    else:
-        dem_ - dem
-    sloped1 = dem_.copy()
-    sloped1[:-1, :] -= sloped1[1:, :]
-    sloped1 /= geotrans[5]
-    sloped2 = dem_.copy()
-    sloped2[:, :-1] -= sloped2[:, 1:]
-    sloped2 /= geotrans[1]
-    nsloped = np.cos(ang) * sloped1 + np.sin(ang) * sloped2
-    esloped = -np.sin(ang) * sloped1 + np.cos(ang) * sloped2
-    return np.stack((nsloped, esloped), axis=0)
-
-def _median_asymindex(slope):
-    slopep = np.nanpercentile(slope[0, ...], (25, 50, 75))
-    asymi = -100 * slopep[1] / (slopep[2] - slopep[0])  # pos: N facing steeper
-    return asymi
-
-def _logratio_asymindex(slope, minslope=0.05, aspthresh=1):
-    import warnings
-    slope_ = np.reshape(slope.copy(), (slope.shape[0], -1))
-    slope_abs = np.sqrt(np.sum(slope_ ** 2, axis=0))
-    asp = slope_[0] / np.abs(slope_[1])
-    with warnings.catch_warnings():
-        warnings.filterwarnings('ignore', category=RuntimeWarning)
-        slope_abs_n = slope_abs[np.logical_and(asp >= aspthresh, slope_abs >= minslope)]
-        slope_abs_s = slope_abs[np.logical_and(asp <= -aspthresh, slope_abs >= minslope)]
-    asymi = np.log10(np.median(slope_abs_n) / np.median(slope_abs_s))
-    return asymi
-
-def asymindex(slope, indtype='median', **kwargs):
-    if indtype == 'median':
-        asymi = _median_asymindex(slope)
-    elif indtype == 'logratio':
-        asymi = _logratio_asymindex(slope, **kwargs)
-    return asymi
-
-def inpaint_mask(dem, geotrans, bp=(100, 1000), invalid=invalid):
-    # to do: use opencv inpainting; reasonable length scales
-    dem[dem <= invalid] = np.nan  # improve infilling
-    from scipy.ndimage import median_filter, binary_dilation, generate_binary_structure
-    demf = median_filter(dem, size=2 * int(np.abs(bp[0] / geotrans[1])))
-    dem[np.isnan(dem)] = demf[np.isnan(dem)]
-    mask = np.isnan(dem)
-    l_int = bp[1] if bp[1] is not None else 3 * bp[0]
-    selem = generate_binary_structure(2, 1)
-    mask = binary_dilation(
-        mask, selem, iterations=int(np.abs(l_int / geotrans[1])))
-    dem[mask] = np.nanmedian(dem)
-    return dem, mask
-
-def test_asymter():
-    tile = (52, 19)  # (40, 17)  # (49, 20)
-    bp = (100, 2000)  # 3000 and larger have issues with large-scale slopes
-    buffer = 2 * bp[0]
-
-    dem, proj, geotrans = read_tile(tile=tile)
-    ang = _angle_meridian(dem, proj, geotrans)
-
-#     ang = np.deg2rad(90)
-#     dem = np.zeros((4096, 4096))
-#     dem[:, :] = 100 * np.real(np.exp(1j * (np.cos(ang) * np.arange(dem.shape[0])[:, np.newaxis] - np.sin(ang) * np.arange(dem.shape[1])[np.newaxis, :]) / 20))
-
-    dem, mask_gap = inpaint_mask(dem, geotrans, bp=bp)
-    geospatial = Geospatial(shape=dem.shape, proj=proj, geotrans=geotrans)
-    mask_water = match_watermask(geospatial, cutoffpct=5.0, buffer=buffer)
-    mask = np.logical_or(mask_water, mask_gap)
-
-    slope = slope_bp(dem, proj, geotrans, bp=bp, ang=ang)
-    slope[:, mask] = np.nan
-
-    sloped = slope_discrete_bp(dem, proj, geotrans, ang=ang, bp=bp)
-    sloped[:, mask] = np.nan
-
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(ncols=3)
-#     dem = bandpass(dem, geotrans, bp=bp)
-    ax[0].imshow(dem)
-    vlim = 0.3
-    ax[1].imshow(slope[0, ...], vmin=-vlim, vmax=vlim, cmap='bwr')
-    ax[2].imshow(sloped[0, ...], vmin=-vlim, vmax=vlim, cmap='bwr')
-
-#     nslopew = nslope[1700:2400, 1250:2500]
-    for slope_ in (slope, sloped):
-        slopew = slope_[:, 1000:-1000, 1000:-1000]
-        print(asymindex(slopew), asymindex(slopew, indtype='logratio'))
-        print(np.nanmean(slopew[0, ...]), np.nanpercentile(slopew[0, ...], (25, 50, 75)))  # also store the mean/median
-    # do scatterplot comparison
-    plt.show()
+    bufferpix = (abs(int(buffer / geotrans[1])), abs(int(buffer / geotrans[5])))
+    pos0 = (geotrans[0] - np.sign(geotrans[1]) * buffer,
+            geotrans[3] - np.sign(geotrans[5]) * buffer)
+    # need to convert to non-numpy int
+    shape_ = tuple(int(l) for l in dem_.shape + np.abs(np.array(bufferpix)) * 2)
+    geotrans_ = (pos0[0], geotrans[1], 0.0, pos0[1], 0.0, geotrans[5])
+    geospatial = Geospatial(shape=shape_, proj=proj, geotrans=geotrans_)
+    tiles = list(
+        product([tile[0] + d for d in [-1, 0, 1]], [tile[1] + d for d in [-1, 0, 1]]))
+    # create virtual raster
+    import tempfile
+    with tempfile.TemporaryDirectory() as dirtmp:
+        fnvrt = os.path.join(dirtmp, 'merged.vrt')
+        tile_virtual_raster(tiles, fnvrt, path=path, res=res, version=version)
+        # resample
+        src = gdal.Open(fnvrt, gdal.GA_ReadOnly)
+        dem = resample_gdal(geospatial, datatype='float32', src=src)
+    return dem, proj, geotrans_, bufferpix
 
 def download_tile(
-        tile=(50, 19), path=pathADEM, res=resdef, version=versiondef, overwrite=False):
+        tile=(50, 19), path=pathADEM, res=ADEMresdef, version=ADEMversiondef, 
+        overwrite=False):
     import tarfile, requests
-
-    absurl = 'http://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/mosaic/'
     tilestr = f'{tile[0]}_{tile[1]}_{res}_{version}'
     resurl = f'{version}/{res}/{tile[0]}_{tile[1]}/{tilestr}.tar.gz'
-    fnlocal = os.path.join(path, f'{tilestr}.tar.gz')
-    pathtile = os.path.join(path, tilestr)
+    fnlocal = os.path.join(path, res, f'{tilestr}.tar.gz')
+    pathtile = os.path.join(path, res, tilestr)
     if overwrite or not os.path.exists(pathtile):
-        url = urljoin(absurl, resurl)
+        url = absurl + resurl
         response = requests.get(url)
+        print(url, response.status_code)
         if response.status_code != 404:
             with open(fnlocal, 'wb') as f:
+                print(f'downloading {url} to {fnlocal}')
                 f.write(response.content)
             try:
                 with tarfile.open(fnlocal, 'r:gz') as tar:
@@ -215,17 +92,15 @@ def download_tile(
             except:
                 print(f'Could not download {url}')
 
+def download_all_tiles(
+        tilemax=74, path=pathADEM, res=ADEMresdef, version=ADEMversiondef, overwrite=False):
+    from itertools import product
+    tilenos = range(1, tilemax + 1)
+    for tile in product(tilenos, tilenos):
+        download_tile(tile=tile, path=path, res=res, version=version, overwrite=overwrite)
+    
+
+
 if __name__ == '__main__':
-    test_asymter()
-
-#     src = osr.SpatialReference()
-#     tgt = osr.SpatialReference()
-#     src.ImportFromEPSG(3413)
-#     tgt.ImportFromEPSG(4326)
-#     transform = osr.CoordinateTransformation(src, tgt)
-#     itransform = osr.CoordinateTransformation(tgt, src)
-#     x, y = geotrans[0], geotrans[3]
-#     coords = transform.TransformPoint(x, y)
-#     print(coords)
-#     xn, yn, _ = itransform.TransformPoint(coords[0], coords[1] + 0.5, 0)
-
+#     download_all_tiles()
+    pass
