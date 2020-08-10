@@ -14,3 +14,4 @@ elif hostname == 'Vienna':
 
 pathADEM = os.path.join(path0, 'ArcticDEM')
 pathwm = os.path.join(path0, 'watermask')
+pathindices = os.path.join(path0, 'indices')

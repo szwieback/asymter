@@ -36,6 +36,9 @@ def read_tile(tile=(52, 19), path=pathADEM, res=ADEMresdef, version=ADEMversiond
     dem, proj, geotrans = read_gdal(fntif)
     return dem, proj, geotrans
 
+def tile_available(tile=(52, 19), path=pathADEM, res=ADEMresdef, version=ADEMversiondef):
+    return os.path.exists(filename_ADEM(tile=tile, path=path, res=res, version=version))
+
 def tile_virtual_raster(
         tiles, fnvrt, path=pathADEM, res=ADEMresdef, version=ADEMversiondef):
     inputtif = [

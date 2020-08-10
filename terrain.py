@@ -5,11 +5,14 @@ Created on Aug 6, 2020
 '''
 import numpy as np
 from numpy.fft import fftshift, ifftshift, fft2, ifft2
+import os
 
-from paths import pathADEM
-from IO import Geospatial
+from paths import pathADEM, pathindices
+from IO import (Geospatial, gdal_cclip, save_object, load_object, enforce_directory,
+                save_geotiff, proj_from_epsg)
 from watermask import match_watermask
-from ArcticDEM import read_tile_buffer, projdef, ADEMversiondef, ADEMinvalid, ADEMresdef
+from ArcticDEM import (read_tile_buffer, tile_available, ADEMversiondef,
+                       ADEMinvalid, ADEMresdef)
 
 def zero_pad(arr, pct=25):
     shapeout = (np.array(arr.shape) * (1 + pct / 100))
@@ -29,7 +32,8 @@ def spatial_frequencies(shape, samp):
     return tuple(sf)
 
 def _angle_meridian(dem, proj, geotrans):
-    assert proj == projdef
+    assert 'Polar_Stereographic' in proj
+#     assert proj == projdef
     assert geotrans[2] == geotrans[4] == 0
     xm = geotrans[0] + geotrans[1] * dem.shape[1] // 2
     ym = geotrans[3] + geotrans[5] * dem.shape[0] // 2
@@ -59,6 +63,20 @@ def bandpass(dem, geotrans, bp=(None, None), zppct=25.0, freqdomain=False):
         dem_ = np.real(ifft2(ifftshift(speczpc)))
         dem_ = dem_[0:dem.shape[0], 0:dem.shape[1]].copy()
         return dem_
+
+def inpaint_mask(dem, geotrans, bp=(100, 1000), ADEMinvalid=ADEMinvalid):
+    # to do: use opencv inpainting; reasonable length scales
+    dem[dem <= ADEMinvalid] = np.nan
+    from scipy.ndimage import median_filter, binary_dilation, generate_binary_structure
+    demf = median_filter(dem, size=2 * int(np.abs(bp[0] / geotrans[1])))
+    dem[np.isnan(dem)] = demf[np.isnan(dem)]
+    mask = np.isnan(dem)
+    l_int = 2 * bp[1] if bp[1] is not None else 3 * bp[0]
+    selem = generate_binary_structure(2, 1)
+    mask = binary_dilation(
+        mask, selem, iterations=int(np.abs(l_int / geotrans[1])))
+    dem[mask] = np.nanmedian(dem)
+    return dem, mask
 
 def slope_bp(dem, proj, geotrans, bp=(100, 2500), ang=None, zppct=25.0):
     if ang is None:
@@ -116,29 +134,57 @@ def asymindex(slope, indtype='median', **kwargs):
         asymi = _logratio_asymindex(slope, **kwargs)
     return asymi
 
-def inpaint_mask(dem, geotrans, bp=(100, 1000), ADEMinvalid=ADEMinvalid):
-    # to do: use opencv inpainting; reasonable length scales
-    dem[dem <= ADEMinvalid] = np.nan  # improve infilling
-    from scipy.ndimage import median_filter, binary_dilation, generate_binary_structure
-    demf = median_filter(dem, size=2 * int(np.abs(bp[0] / geotrans[1])))
-    dem[np.isnan(dem)] = demf[np.isnan(dem)]
-    mask = np.isnan(dem)
-    l_int = bp[1] if bp[1] is not None else 3 * bp[0]
-    selem = generate_binary_structure(2, 1)
-    mask = binary_dilation(
-        mask, selem, iterations=int(np.abs(l_int / geotrans[1])))
-    dem[mask] = np.nanmedian(dem)
-    return dem, mask
+def asymindex_pts(slope, pts, geotrans, cellsize=(25e3, 25e3), indtype='median', **kwargs):
+    asymind_pts = []
+    for pt in pts:
+        cwindow = (pt[0], pt[1], cellsize[0], cellsize[1])
+        slopew = gdal_cclip(slope, geotrans, cwindow)
+        asymind_pts.append(asymindex(slopew, indtype=indtype, **kwargs))
+    return asymind_pts
+
+def asymter_tile(
+        pts, cellsize=(25e3, 25e3), tile=(53, 17), bp=(100, 2000), buffer_water=None,
+        buffer_read=None, indtype='median', pathADEM=pathADEM, res=ADEMresdef,
+        version=ADEMversiondef, water_cutoffpct=5.0, **kwargs):
+    if buffer_water is None:
+        buffer_water = 2 * bp[0]
+    if buffer_read is None:
+        buffer_read = cellsize[0] + 10 * bp[1]
+
+    if tile_available(tile=tile, path=pathADEM, res=res, version=version) and len(pts) > 0:
+        dem, proj, geotrans, bufferpix = read_tile_buffer(
+            tile=tile, buffer=buffer_read, path=pathADEM, version=ADEMversiondef,
+            res=ADEMresdef)
+        # azimuth angle of meridian
+        ang = _angle_meridian(dem, proj, geotrans)
+        # masks
+        dem, mask_gap = inpaint_mask(dem, geotrans, bp=bp)
+        geospatial = Geospatial(shape=dem.shape, proj=proj, geotrans=geotrans)
+        mask_water = match_watermask(
+            geospatial, cutoffpct=water_cutoffpct, buffer=buffer_water)
+        mask = np.logical_or(mask_water, mask_gap)
+        if np.count_nonzero(np.isfinite(mask)) > 0:
+            slope = slope_bp(dem, proj, geotrans, bp=bp, ang=ang)
+        else:
+            slope = np.stack((dem, dem), axis=0)
+        slope[:, mask] = np.nan
+
+        asym = asymindex_pts(
+            slope, pts, geotrans, cellsize=cellsize, indtype=indtype, **kwargs)
+    else:
+        asym = list(np.ones((len(pts),)) * np.nan)
+    return asym
 
 def test_asymter():
-    tile = (53, 17)  # (40, 17)  # (49, 20)
+    tile = (34, 42)  # (40, 17)  # (49, 20)
     bp = (100, 2000)  # 3000 and larger have issues with large-scale slopes
     buffer_water = 2 * bp[0]
     buffer_read = 10 * bp[1]
 
     dem, proj, geotrans, bufferpix = read_tile_buffer(
-        tile=tile, buffer=buffer_read, path=pathADEM, version=ADEMversiondef, res=ADEMresdef)
-    
+        tile=tile, buffer=buffer_read, path=pathADEM, version=ADEMversiondef,
+        res=ADEMresdef)
+
     print(geotrans, np.array(dem.shape) * np.array((geotrans[1], geotrans[5])))
     ang = _angle_meridian(dem, proj, geotrans)
 
@@ -175,3 +221,61 @@ def test_asymter():
               np.nanpercentile(slopew[0, ...], (25, 50, 75)))  # also store the mean/median
     # do scatterplot comparison
     plt.show()
+
+def _batch_asymterr(tilestruc, pathout, cellsize=(25e3, 25e3), bp=(100, 2000),
+    indtype='median', water_cutoffpct=5.0, overwrite=False, **kwargs):
+    tile = tilestruc.tile
+    fnout = os.path.join(pathout, f'{tile[0]}_{tile[1]}.p')
+    if not os.path.exists(fnout) or overwrite:
+        ptslist = list(tilestruc.pts)
+        asymind_tile = asymter_tile(
+            ptslist, cellsize=cellsize, tile=tile, bp=bp, indtype=indtype,
+            water_cutoffpct=water_cutoffpct, **kwargs)
+        dictout = {'tile': tilestruc.tile, 'asymind': asymind_tile, 'pts': ptslist,
+                   'ind': list(tilestruc.ind)}
+        save_object(dictout, fnout)
+    else:
+        dictout = load_object(fnout)
+    return dictout
+
+def batch_asymterr(
+        scenname, indtype='median', pathind=pathindices, overwrite=False, n_jobs=-1):
+    from grids import gridtiles, create_grid, corner0, spacingdef, corner1, EPSGdef
+    spacing = spacingdef
+    grid = create_grid(spacing=spacing, corner0=corner0, corner1=corner1)
+    kwargs = {}
+    cellsize = (25e3, 25e3)
+    bp = (100, 2000)
+    water_cutoffpct = 5.0
+    geotrans = (corner0[0], spacing[0], 0.0, corner0[1], 0.0, spacing[1])
+    proj = proj_from_epsg(EPSGdef)
+    
+    pathout = os.path.join(pathind, scenname)
+    enforce_directory(pathout)
+    gt = gridtiles(grid)
+    def _process(tilestruc):
+        res = _batch_asymterr(
+            tilestruc, pathout, cellsize=cellsize, bp=bp, indtype=indtype,
+            water_cutoffpct=water_cutoffpct, overwrite=overwrite, **kwargs)
+        return res
+    if n_jobs == 1:
+        asyminds = []
+        for tilestruc in gt:
+            asyminds.append(_process(tilestruc))
+    else:
+        from joblib import Parallel, delayed
+        asymind = Parallel(n_jobs=n_jobs)(delayed(_process)(tilestruc) for tilestruc in gt)
+    asymindarr = np.zeros((len(grid[1]), len(grid[0]))) + np.nan
+    for asyminddict in asymind:
+        for ptind, asymind in zip(asyminddict['ind'], asyminddict['asymind']):
+            asymindarr[ptind[1], ptind[0]] = asymind
+    fnout = os.path.join(pathout, f'{scenname}.tif')
+    save_geotiff(asymindarr, fnout, geotransform=geotrans, proj=proj)
+
+if __name__ == '__main__':
+#     test_asymter()
+#     batch_asymterr('medianstd', indtype='median', overwrite=False)
+    batch_asymterr('logratiostd', indtype='logratio', overwrite=False)
+
+    # fix geolocation error
+    # test region with large negative values

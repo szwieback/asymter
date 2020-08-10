@@ -10,13 +10,12 @@ import itertools
 from osgeo import gdal
 import numpy as np
 
-from IO import resample_gdal, read_gdal
+from IO import resample_gdal, read_gdal, enforce_directory
 from paths import pathwm
 
 pathwmmerged = os.path.join(pathwm, 'merged')
 patterndef = ('occurrence', 'occurrence_{0}_{1}v1_1_2019.tif')
 url0 = 'https://storage.googleapis.com/global-surface-water/downloads2019v2/'
-if not os.path.exists(pathwmmerged): os.makedirs(pathwmmerged)
 fnvrt = os.path.join(pathwmmerged, 'merged.vrt')
 
 def download_single(
@@ -42,6 +41,7 @@ def download_Arctic(pathlocal=pathwm, pattern=patterndef, overwrite=False):
 
 def panArctic_virtual(pattern=patterndef, fnvrt=fnvrt, pathwm=pathwm):
     import glob
+    enforce_directory(os.path.dirname(fnvrt))
     inputtif = glob.glob(os.path.join(pathwm, pattern[1].format('*', '*')))
     gdal.BuildVRT(fnvrt, inputtif)
 
