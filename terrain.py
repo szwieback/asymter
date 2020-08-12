@@ -246,7 +246,7 @@ def asymter_tile(
     return asym
 
 def test_asymter():
-    tile = (27, 30)  # (40, 17)  # (49, 20)
+    tile = (33, 60)  # (40, 17)  # (49, 20)
     bp = (100, None)  # 3000 and larger have issues with large-scale slopes
     buffer_water = 2 * bp[0]
     buffer_read = 1000  # 10 * bp[1]
@@ -277,8 +277,8 @@ def test_asymter():
 #     dem = bandpass(dem, geotrans, bp=bp)
     ax[0].imshow(dem)
     vlim = 0.3
-    ax[1].imshow(slope[1, ...], vmin=-vlim, vmax=vlim, cmap='bwr')
-    ax[2].imshow(sloped[1, ...], vmin=-vlim, vmax=vlim, cmap='bwr')
+    ax[1].imshow(slope[0, ...], vmin=-vlim, vmax=vlim, cmap='bwr')
+    ax[2].imshow(sloped[0, ...], vmin=-vlim, vmax=vlim, cmap='bwr')
 
 #     nslopew = nslope[1700:2400, 1250:2500]
     for slope_ in (slope, sloped):
@@ -363,9 +363,9 @@ def batch_asymterr(
 if __name__ == '__main__':
     indtypes = [
         'median', 'logratio', 'roughness', 'medianEW', 'logratioEW', 'N', 'N_logratio']
-#     batch_asymterr('bandpass', indtypes=indtypes, cellsize=(25e3, 25e3), bp=(100, 2000),
-#         water_cutoffpct=5.0, overwrite=False, bootstrap_se=True, N_bootstrap=25, n_jobs=-1)
-#     batch_asymterr('lowpass', indtypes=indtypes, cellsize=(25e3, 25e3), bp=(100, None),
-#         water_cutoffpct=5.0, overwrite=False, bootstrap_se=True, N_bootstrap=25, n_jobs=4)
-    test_asymter()
+    batch_asymterr('bandpass', indtypes=indtypes, cellsize=(25e3, 25e3), bp=(100, 2000),
+        water_cutoffpct=5.0, overwrite=False, bootstrap_se=True, N_bootstrap=25, n_jobs=-1)
+    batch_asymterr('lowpass', indtypes=indtypes, cellsize=(25e3, 25e3), bp=(100, None),
+        water_cutoffpct=5.0, overwrite=False, bootstrap_se=True, N_bootstrap=25, n_jobs=4)
+#     test_asymter()
     # test region with large negative values

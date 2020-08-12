@@ -26,9 +26,12 @@ projdef = (
 lonoffset = float(projdef[projdef.rindex('central_meridian') + 18:].split(']')[0])
 absurl = 'http://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/mosaic/'
 
+def tilestr(tile):
+    return str(tile[0]).zfill(2) + '_' + str(tile[1]).zfill(2)
+
 def filename_ADEM(tile=(52, 19), path=pathADEM, res=ADEMresdef, version=ADEMversiondef):
-    tilestr = f'{tile[0]}_{tile[1]}_{res}_{version}'
-    fntif = os.path.join(path, res, tilestr, tilestr + '_reg_dem.tif')
+    tilename = f'{tilestr(tile)}_{res}_{version}'
+    fntif = os.path.join(path, res, tilename, tilename + '_reg_dem.tif')
     return fntif
 
 def read_tile(tile=(52, 19), path=pathADEM, res=ADEMresdef, version=ADEMversiondef):
@@ -75,10 +78,10 @@ def download_tile(
         tile=(50, 19), path=pathADEM, res=ADEMresdef, version=ADEMversiondef, 
         overwrite=False):
     import tarfile, requests
-    tilestr = f'{tile[0]}_{tile[1]}_{res}_{version}'
-    resurl = f'{version}/{res}/{tile[0]}_{tile[1]}/{tilestr}.tar.gz'
-    fnlocal = os.path.join(path, res, f'{tilestr}.tar.gz')
-    pathtile = os.path.join(path, res, tilestr)
+    tilename = f'{tilestr(tile)}_{res}_{version}'
+    resurl = f'{version}/{res}/{tilestr(tile)}/{tilename}.tar.gz'
+    fnlocal = os.path.join(path, res, f'{tilename}.tar.gz')
+    pathtile = os.path.join(path, res, tilename)
     if overwrite or not os.path.exists(pathtile):
         url = absurl + resurl
         response = requests.get(url)
@@ -102,8 +105,6 @@ def download_all_tiles(
     for tile in product(tilenos, tilenos):
         download_tile(tile=tile, path=path, res=res, version=version, overwrite=overwrite)
     
-
-
 if __name__ == '__main__':
-#     download_all_tiles()
+    download_all_tiles()
     pass
