@@ -21,6 +21,14 @@ def read_gdal(fntif):
     geotrans = f.GetGeoTransform()
     return im, proj, geotrans
 
+def geospatial_from_file(fn):
+    f = gdal.Open(fn, gdal.GA_ReadOnly)
+    proj = f.GetProjection()
+    geotrans = f.GetGeoTransform()
+    shape = (f.RasterYSize, f.RasterXSize)
+    geospatial = Geospatial(shape=shape, proj=proj, geotrans=geotrans)
+    return geospatial
+
 def resample_gdal(
         geospatial, inarr=None, inproj=None, ingeotrans=None, datatype='float32',
         src=None, average=False):
@@ -71,8 +79,8 @@ def index_from_coord(coords, geotransform):
 def gdal_cclip(im, geotrans, cwindow):
     gt = geotrans
     cw = cwindow
-    inda = index_from_coord((cw[0] + cw[2]/2, cw[1] + cw[3]/2), gt)[:, 0].astype(np.int64)
-    indb = index_from_coord((cw[0] - cw[2]/2, cw[1] - cw[3]/2), gt)[:, 0].astype(np.int64)
+    inda = index_from_coord((cw[0] + cw[2] / 2, cw[1] + cw[3] / 2), gt)[:, 0].astype(np.int64)
+    indb = index_from_coord((cw[0] - cw[2] / 2, cw[1] - cw[3] / 2), gt)[:, 0].astype(np.int64)
     ll = (min(max(0, min(inda[0], indb[0])), im.shape[-2]),
           min(max(0, min(inda[1], indb[1])), im.shape[-1]))
     ur = (min(max(0, max(inda[0], indb[0])), im.shape[-2]),
@@ -127,7 +135,7 @@ def save_object(obj, filename):
     enforce_directory(os.path.dirname(filename))
     with open(filename, 'wb') as f:
         f.write(zlib.compress(pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)))
-        
+
 def load_object(filename):
     if os.path.splitext(filename)[1].strip() == '.npy':
         return np.load(filename)
