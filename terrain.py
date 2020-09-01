@@ -156,20 +156,29 @@ def _roughness(slope):
         roughness = np.nan
     return roughness
 
-def asymindex(slope, indtype='median', bootstrap_se=False, N_bootstrap=100, **kwargs):
-    # slope: (2, N), no NaN
+def _ruggedness(dem):
+    if dem.shape[1] > 0:
+        ruggedness = np.percentile(dem[0, ...], 90) - np.percentile(dem[0, ...], 10)
+    else:
+        ruggedness = np.nan
+    return ruggedness
+
+def asymindex(topo, indtype='median', bootstrap_se=False, N_bootstrap=100, **kwargs):
+    # topo: (2, N) [slope: NS, EW], or (1, N) [just DEM] if noslope; no NaN
     if not bootstrap_se:
         # EW same sign convention as NS
         if indtype in ('median', 'medianEW'):
-            asymi = _median_asymindex(slope, indtype=indtype)
+            asymi = _median_asymindex(topo, indtype=indtype)
         elif indtype in ('logratio', 'logratioEW'):
-            asymi = _logratio_asymindex(slope, indtype=indtype, **kwargs)
+            asymi = _logratio_asymindex(topo, indtype=indtype, **kwargs)
         elif indtype == 'N':
-            asymi = slope.shape[-1]
+            asymi = topo.shape[-1]
         elif indtype == 'N_logratio':
-            asymi = _logratio_asymindex(slope, count=True, **kwargs)
+            asymi = _logratio_asymindex(topo, count=True, **kwargs)
         elif indtype == 'roughness':
-            asymi = _roughness(slope)
+            asymi = _roughness(topo)
+        elif indtype == 'ruggedness':
+            asymi = _ruggedness(topo)
         else:
             raise NotImplementedError(f'{indtype} not known')
     else:
@@ -177,31 +186,31 @@ def asymindex(slope, indtype='median', bootstrap_se=False, N_bootstrap=100, **kw
         rng = np.random.default_rng(seed=seed)
         asymi_bs = []
         for _ in range(N_bootstrap):
-            slope_bs = rng.choice(slope, size=slope.shape[1], axis=1)
-            asymi_bs.append(asymindex(slope_bs, indtype=indtype, **kwargs))
+            topo_bs = rng.choice(topo, size=topo.shape[1], axis=1)
+            asymi_bs.append(asymindex(topo_bs, indtype=indtype, **kwargs))
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', category=RuntimeWarning)
             asymi = np.nanstd(asymi_bs, ddof=1)
     return asymi
 
 def asymindex_pts(
-        slope, pts, geotrans, cellsize=(25e3, 25e3), indtypes=['median'],
+        topo, pts, geotrans, cellsize=(25e3, 25e3), indtypes=['median'],
         bootstrap_se=False, N_bootstrap=100, valid=True, **kwargs):
     from collections import defaultdict
     asym = defaultdict(lambda: [])
     for pt in pts:
         cwindow = (pt[0], pt[1], cellsize[0], cellsize[1])
-        if slope is not None:
-            slopew = gdal_cclip(slope, geotrans, cwindow)
-            slopew = np.reshape(slopew, (slopew.shape[0], -1))
-            slopew = slopew[:, np.all(np.isfinite(slopew), axis=0)]
+        if topo is not None:
+            topow = gdal_cclip(topo, geotrans, cwindow)
+            topow = np.reshape(topow, (topow.shape[0], -1))
+            topow = topow[:, np.all(np.isfinite(topow), axis=0)]
         for indtype in indtypes:
             if valid:
                 asym[indtype].append(
-                    asymindex(slopew, indtype=indtype, **kwargs))
+                    asymindex(topow, indtype=indtype, **kwargs))
                 if bootstrap_se and indtype in indices_bootstrap:
                     asym[f'{indtype}_se'].append(
-                        asymindex(slopew, indtype=indtype, bootstrap_se=True,
+                        asymindex(topow, indtype=indtype, bootstrap_se=True,
                                   N_bootstrap=N_bootstrap, **kwargs))
             else:
                 asym[indtype].append(np.nan)
@@ -213,15 +222,15 @@ def asymindex_pts(
 def asymter_tile(
         pts, cellsize=(25e3, 25e3), tile=(53, 17), bp=(100, 2000), buffer_water=None,
         buffer_read=None, indtypes=['median'], water_cutoffpct=5.0, bootstrap_se=False,
-        N_bootstrap=100, pathADEM=pathADEM, res=ADEMresdef, version=ADEMversiondef,
-        **kwargs):
+        N_bootstrap=100, noslope=False, pathADEM=pathADEM, res=ADEMresdef,
+        version=ADEMversiondef, **kwargs):
     if buffer_water is None:
         buffer_water = 2 * bp[0]
     if buffer_read is None:
         _bp = bp[1] if bp[1] is not None else bp[0]
         buffer_read = cellsize[0] + 10 * _bp
 
-    slope = None
+    topo = None
     valid = False
     geotrans = None
     if tile_available(tile=tile, path=pathADEM, res=res, version=version) and len(pts) > 0:
@@ -236,12 +245,17 @@ def asymter_tile(
         mask_water = match_watermask(
             geospatial, cutoffpct=water_cutoffpct, buffer=buffer_water)
         mask = np.logical_or(mask_water, mask_gap)
-        if np.count_nonzero(np.isfinite(mask)) > 0:
-            slope = slope_bp(dem, proj, geotrans, bp=bp, ang=ang)
-            slope[:, mask] = np.nan
-            valid = True
+        valid = True
+        if np.count_nonzero(np.isfinite(mask)) > 0 and not noslope:
+            topo = slope_bp(dem, proj, geotrans, bp=bp, ang=ang)
+            topo[:, mask] = np.nan
+        elif np.count_nonzero(np.isfinite(mask)) and noslope:
+            topo = dem[np.newaxis, ...]
+            topo[:, mask] = np.nan
+        else:
+            valid = False
     asym = asymindex_pts(
-        slope, pts, geotrans, cellsize=cellsize, indtypes=indtypes,
+        topo, pts, geotrans, cellsize=cellsize, indtypes=indtypes,
         bootstrap_se=bootstrap_se, N_bootstrap=N_bootstrap, valid=valid, **kwargs)
     return asym
 
@@ -291,9 +305,10 @@ def test_asymter():
     # do scatterplot comparison
     plt.show()
 
-def _batch_asymterr(tilestruc, pathout, cellsize=(25e3, 25e3), bp=(100, 2000),
-    indtypes=['median'], water_cutoffpct=5.0, bootstrap_se=False, N_bootstrap=100,
-    overwrite=False, **kwargs):
+def _batch_asymterr(
+        tilestruc, pathout, cellsize=(25e3, 25e3), bp=(100, 2000),
+        indtypes=['median'], water_cutoffpct=5.0, bootstrap_se=False, N_bootstrap=100,
+        noslope=False, overwrite=False, **kwargs):
     tile = tilestruc.tile
     fnout = os.path.join(pathout, f'{tilestr(tile)}.p')
     if not os.path.exists(fnout): print(fnout)
@@ -302,7 +317,7 @@ def _batch_asymterr(tilestruc, pathout, cellsize=(25e3, 25e3), bp=(100, 2000),
         asymind_tile = asymter_tile(
             ptslist, cellsize=cellsize, tile=tile, bp=bp, indtypes=indtypes,
             water_cutoffpct=water_cutoffpct, bootstrap_se=bootstrap_se,
-            N_bootstrap=N_bootstrap, **kwargs)
+            N_bootstrap=N_bootstrap, noslope=noslope, **kwargs)
         dictout = {'tile': tilestruc.tile, 'asymind': asymind_tile, 'pts': ptslist,
                    'ind': list(tilestruc.ind)}
         save_object(dictout, fnout)
@@ -323,7 +338,7 @@ def _write_geotiff(pathout, scenname, grid, asyminds, geotrans, proj, indtype='m
 def batch_asymterr(
         scenname, indtypes=['median'], cellsize=(25e3, 25e3), bp=(100, 2000),
         water_cutoffpct=5.0, bootstrap_se=False, N_bootstrap=100, pathind=pathindices,
-        overwrite=False, n_jobs=-1):
+        noslope=False, overwrite=False, n_jobs=-1):
     from grids import gridtiles, create_grid, corner0, spacingdef, corner1, EPSGdef
     spacing = spacingdef
     grid = create_grid(spacing=spacing, corner0=corner0, corner1=corner1)
@@ -339,9 +354,10 @@ def batch_asymterr(
             res = _batch_asymterr(
                 tilestruc, pathout, cellsize=cellsize, bp=bp, indtypes=indtypes,
                 water_cutoffpct=water_cutoffpct, bootstrap_se=bootstrap_se,
-                N_bootstrap=N_bootstrap, overwrite=overwrite, **kwargs)
+                N_bootstrap=N_bootstrap, noslope=noslope, overwrite=overwrite, **kwargs)
         except:
             print(f'Error in {tilestruc.tile}')
+            raise
             res = None
         return res
     if n_jobs == 1:
@@ -357,14 +373,16 @@ def batch_asymterr(
     indtypes_ = indtypes
     if bootstrap_se:
         indtypes_ = indtypes_ + [f'{it}_se' for it in indtypes if it in indices_bootstrap]
-    for indtype in indtypes_: # add se
+    for indtype in indtypes_:  # add se
         _write_geotiff(pathout, scenname, grid, asyminds, geotrans, proj, indtype=indtype)
 
 if __name__ == '__main__':
     indtypes = [
         'median', 'logratio', 'roughness', 'medianEW', 'logratioEW', 'N', 'N_logratio']
+    indtypes_dem = ['ruggedness']
 #     batch_asymterr('bandpass', indtypes=indtypes, cellsize=(25e3, 25e3), bp=(100, 2000),
 #         water_cutoffpct=5.0, overwrite=False, bootstrap_se=True, N_bootstrap=25, n_jobs=4)
 #     batch_asymterr('lowpass', indtypes=indtypes, cellsize=(25e3, 25e3), bp=(100, None),
 #         water_cutoffpct=5.0, overwrite=False, bootstrap_se=True, N_bootstrap=25, n_jobs=4)
-
+    batch_asymterr('raw', indtypes=indtypes_dem, cellsize=(25e3, 25e3), bp=(100, 2000),
+        water_cutoffpct=5.0, overwrite=False, bootstrap_se=False, noslope=True, n_jobs=4)
