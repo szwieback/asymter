@@ -130,7 +130,8 @@ def _median_asymindex(slope, indtype='median'):
         asymi = np.nan
     return asymi
 
-def _logratio_asymindex(slope, minslope=0.05, aspthresh=1, indtype='logratio', count=False):
+def _logratio_asymindex(
+        slope, minslope=0.05, aspthresh=1, indtype='logratio', count=False):
     import warnings
     if indtype == 'logratioEW':
         slope_ = np.flip(slope, axis=0)
@@ -337,15 +338,14 @@ def _write_geotiff(pathout, scenname, grid, asyminds, geotrans, proj, indtype='m
 
 def batch_asymterr(
         scenname, indtypes=['median'], cellsize=(25e3, 25e3), bp=(100, 2000),
-        water_cutoffpct=5.0, bootstrap_se=False, N_bootstrap=100, pathind=pathindices,
-        noslope=False, overwrite=False, n_jobs=-1):
+        spacing=None, water_cutoffpct=5.0, bootstrap_se=False, N_bootstrap=100, 
+        pathind=pathindices, noslope=False, overwrite=False, n_jobs=-1, **kwargs):
     from grids import gridtiles, create_grid, corner0, spacingdef, corner1, EPSGdef
-    spacing = spacingdef
+    if spacing is None:
+        spacing = spacingdef
     grid = create_grid(spacing=spacing, corner0=corner0, corner1=corner1)
-    kwargs = {}
     geotrans = (corner0[0], spacing[0], 0.0, corner0[1], 0.0, spacing[1])
     proj = proj_from_epsg(EPSGdef)
-
     pathout = os.path.join(pathind, scenname)
     enforce_directory(pathout)
     gt = gridtiles(grid)
@@ -377,6 +377,7 @@ def batch_asymterr(
         _write_geotiff(pathout, scenname, grid, asyminds, geotrans, proj, indtype=indtype)
 
 if __name__ == '__main__':
+    spacing_hr = (5e3, -5e3)
     indtypes = [
         'median', 'logratio', 'roughness', 'medianEW', 'logratioEW', 'N', 'N_logratio']
     indtypes_dem = ['ruggedness']
@@ -384,5 +385,11 @@ if __name__ == '__main__':
 #         water_cutoffpct=5.0, overwrite=False, bootstrap_se=True, N_bootstrap=25, n_jobs=4)
 #     batch_asymterr('lowpass', indtypes=indtypes, cellsize=(25e3, 25e3), bp=(100, None),
 #         water_cutoffpct=5.0, overwrite=False, bootstrap_se=True, N_bootstrap=25, n_jobs=4)
-    batch_asymterr('raw', indtypes=indtypes_dem, cellsize=(25e3, 25e3), bp=(100, 2000),
-        water_cutoffpct=5.0, overwrite=False, bootstrap_se=False, noslope=True, n_jobs=4)
+#     batch_asymterr('raw', indtypes=indtypes_dem, cellsize=(25e3, 25e3), bp=(100, 2000),
+#         water_cutoffpct=5.0, overwrite=False, bootstrap_se=False, noslope=True, n_jobs=4)
+    batch_asymterr('bandpass0', indtypes=indtypes, cellsize=(25e3, 25e3), bp=(100, 2000),
+        water_cutoffpct=5.0, overwrite=False, bootstrap_se=True, minslope=0.0, 
+        N_bootstrap=25, n_jobs=8)
+    batch_asymterr('bandpass_hr', indtypes=indtypes, cellsize=(10e3, 10e3), bp=(100, 2000),
+        spacing=spacing_hr, water_cutoffpct=5.0, overwrite=False, bootstrap_se=True, 
+        minslope=0.0, N_bootstrap=25, n_jobs=8)
