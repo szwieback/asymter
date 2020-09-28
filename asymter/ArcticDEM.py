@@ -8,12 +8,11 @@ import os
 from osgeo import gdal
 import numpy as np
 
-from paths import pathADEM
-from IO import read_gdal, Geospatial, resample_gdal
+from asymter import path_adem, read_gdal, Geospatial, resample_gdal
 
-ADEMversiondef = 'v3.0'
-ADEMresdef = '32m'
-ADEMinvalid = -9999.0,
+adem_defversion = 'v3.0'
+adem_defres = '32m'
+adem_definvalid = -9999.0,
 # proj corresponds to EPSG 3413
 projdef = (
     'PROJCS["unnamed",GEOGCS["WGS 84",DATUM["WGS_1984",'
@@ -26,33 +25,34 @@ projdef = (
 lonoffset = float(projdef[projdef.rindex('central_meridian') + 18:].split(']')[0])
 absurl = 'http://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/mosaic/'
 
-def tilestr(tile):
+def adem_tilestr(tile):
     return str(tile[0]).zfill(2) + '_' + str(tile[1]).zfill(2)
 
-def filename_ADEM(tile=(52, 19), path=pathADEM, res=ADEMresdef, version=ADEMversiondef):
-    tilename = f'{tilestr(tile)}_{res}_{version}'
+def adem_filename(tile=(52, 19), path=path_adem, res=adem_defres, version=adem_defversion):
+    tilename = f'{adem_tilestr(tile)}_{res}_{version}'
     fntif = os.path.join(path, res, tilename, tilename + '_reg_dem.tif')
     return fntif
 
-def read_tile(tile=(52, 19), path=pathADEM, res=ADEMresdef, version=ADEMversiondef):
-    fntif = filename_ADEM(tile=tile, path=path, res=res, version=version)
+def read_adem_tile(tile=(52, 19), path=path_adem, res=adem_defres, version=adem_defversion):
+    fntif = adem_filename(tile=tile, path=path, res=res, version=version)
     dem, proj, geotrans = read_gdal(fntif)
     return dem, proj, geotrans
 
-def tile_available(tile=(52, 19), path=pathADEM, res=ADEMresdef, version=ADEMversiondef):
-    return os.path.exists(filename_ADEM(tile=tile, path=path, res=res, version=version))
+def adem_tile_available(
+        tile=(52, 19), path=path_adem, res=adem_defres, version=adem_defversion):
+    return os.path.exists(adem_filename(tile=tile, path=path, res=res, version=version))
 
-def tile_virtual_raster(
-        tiles, fnvrt, path=pathADEM, res=ADEMresdef, version=ADEMversiondef):
+def adem_tile_virtual_raster(
+        tiles, fnvrt, path=path_adem, res=adem_defres, version=adem_defversion):
     inputtif = [
-        filename_ADEM(tile=tile, path=path, res=res, version=version) for tile in tiles]
+        adem_filename(tile=tile, path=path, res=res, version=version) for tile in tiles]
     gdal.BuildVRT(fnvrt, [fntif for fntif in inputtif if os.path.exists(fntif)],
                   VRTNodata=np.nan)
 
-def read_tile_buffer(
-        tile=(52, 19), buffer=2e4, path=pathADEM, res=ADEMresdef, version=ADEMversiondef):
+def read_adem_tile_buffer(
+        tile=(52, 19), buffer=2e4, path=path_adem, res=adem_defres, version=adem_defversion):
     from itertools import product
-    dem_, proj, geotrans = read_tile(tile=tile, path=path, res=res, version=version)
+    dem_, proj, geotrans = read_adem_tile(tile=tile, path=path, res=res, version=version)
     # determine coords
     assert geotrans[2] == geotrans[4] == 0
     bufferpix = (abs(int(buffer / geotrans[1])), abs(int(buffer / geotrans[5])))
@@ -68,18 +68,18 @@ def read_tile_buffer(
     import tempfile
     with tempfile.TemporaryDirectory() as dirtmp:
         fnvrt = os.path.join(dirtmp, 'merged.vrt')
-        tile_virtual_raster(tiles, fnvrt, path=path, res=res, version=version)
+        adem_tile_virtual_raster(tiles, fnvrt, path=path, res=res, version=version)
         # resample
         src = gdal.Open(fnvrt, gdal.GA_ReadOnly)
         dem = resample_gdal(geospatial, datatype='float32', src=src)
     return dem, proj, geotrans_, bufferpix
 
-def download_tile(
-        tile=(50, 19), path=pathADEM, res=ADEMresdef, version=ADEMversiondef, 
+def download_adem_tile(
+        tile=(50, 19), path=path_adem, res=adem_defres, version=adem_defversion, 
         overwrite=False):
     import tarfile, requests
-    tilename = f'{tilestr(tile)}_{res}_{version}'
-    resurl = f'{version}/{res}/{tilestr(tile)}/{tilename}.tar.gz'
+    tilename = f'{adem_tilestr(tile)}_{res}_{version}'
+    resurl = f'{version}/{res}/{adem_tilestr(tile)}/{tilename}.tar.gz'
     fnlocal = os.path.join(path, res, f'{tilename}.tar.gz')
     pathtile = os.path.join(path, res, tilename)
     if overwrite or not os.path.exists(pathtile):
@@ -98,13 +98,14 @@ def download_tile(
             except:
                 print(f'Could not download {url}')
 
-def download_all_tiles(
-        tilemax=74, path=pathADEM, res=ADEMresdef, version=ADEMversiondef, overwrite=False):
+def download_all_adem_tiles(
+        tilemax=74, path=path_adem, res=adem_defres, version=adem_defversion, overwrite=False):
     from itertools import product
     tilenos = range(1, tilemax + 1)
     for tile in product(tilenos, tilenos):
-        download_tile(tile=tile, path=path, res=res, version=version, overwrite=overwrite)
+        download_adem_tile(
+            tile=tile, path=path, res=res, version=version, overwrite=overwrite)
     
 if __name__ == '__main__':
-    download_all_tiles()
+    download_all_adem_tiles()
     pass

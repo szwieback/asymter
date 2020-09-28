@@ -7,12 +7,11 @@ import numpy as np
 from numpy.fft import fftshift, ifftshift, fft2, ifft2
 import os
 
-from paths import pathADEM, pathindices
-from IO import (Geospatial, gdal_cclip, save_object, load_object, enforce_directory,
-                save_geotiff, proj_from_epsg)
-from watermask import match_watermask
-from ArcticDEM import (read_tile_buffer, tile_available, ADEMversiondef,
-                       ADEMinvalid, ADEMresdef, tilestr)
+from asymter import (
+    Geospatial, gdal_cclip, save_object, load_object, enforce_directory, save_geotiff, 
+    proj_from_epsg, path_adem, path_indices, match_watermask, read_adem_tile_buffer, 
+    adem_tile_available, adem_defversion, adem_definvalid, adem_defres, adem_tilestr)
+
 
 indices_bootstrap = ['median', 'logratio', 'roughness', 'medianEW', 'logratioEW']
 seed = 1
@@ -67,13 +66,13 @@ def bandpass(dem, geotrans, bp=(None, None), zppct=25.0, freqdomain=False):
         dem_ = dem_[0:dem.shape[0], 0:dem.shape[1]].copy()
         return dem_
 
-def inpaint_mask(dem, geotrans, bp=(100, 1000), ADEMinvalid=ADEMinvalid):
+def inpaint_mask(dem, geotrans, bp=(100, 1000), adem_definvalid=adem_definvalid):
     # to do: use opencv inpainting; reasonable length scales
     import warnings
     from scipy.ndimage import median_filter, binary_dilation, generate_binary_structure
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category=RuntimeWarning)
-        dem[dem <= ADEMinvalid] = np.nan
+        dem[dem <= adem_definvalid] = np.nan
     demf = median_filter(dem, size=2 * int(np.abs(bp[0] / geotrans[1])))
     dem[np.isnan(dem)] = demf[np.isnan(dem)]
     mask = np.isnan(dem)
@@ -223,8 +222,8 @@ def asymindex_pts(
 def asymter_tile(
         pts, cellsize=(25e3, 25e3), tile=(53, 17), bp=(100, 2000), buffer_water=None,
         buffer_read=None, indtypes=['median'], water_cutoffpct=5.0, bootstrap_se=False,
-        N_bootstrap=100, noslope=False, pathADEM=pathADEM, res=ADEMresdef,
-        version=ADEMversiondef, **kwargs):
+        N_bootstrap=100, noslope=False, path_adem=path_adem, res=adem_defres,
+        version=adem_defversion, **kwargs):
     if buffer_water is None:
         buffer_water = 2 * bp[0]
     if buffer_read is None:
@@ -234,10 +233,10 @@ def asymter_tile(
     topo = None
     valid = False
     geotrans = None
-    if tile_available(tile=tile, path=pathADEM, res=res, version=version) and len(pts) > 0:
-        dem, proj, geotrans, _ = read_tile_buffer(
-            tile=tile, buffer=buffer_read, path=pathADEM, version=ADEMversiondef,
-            res=ADEMresdef)
+    if adem_tile_available(tile=tile, path=path_adem, res=res, version=version) and len(pts) > 0:
+        dem, proj, geotrans, _ = read_adem_tile_buffer(
+            tile=tile, buffer=buffer_read, path=path_adem, version=adem_defversion,
+            res=adem_defres)
         # azimuth angle of meridian
         ang = _angle_meridian(dem, proj, geotrans)
         # masks
@@ -260,58 +259,12 @@ def asymter_tile(
         bootstrap_se=bootstrap_se, N_bootstrap=N_bootstrap, valid=valid, **kwargs)
     return asym
 
-def test_asymter():
-    tile = (33, 60)  # (40, 17)  # (49, 20)
-    bp = (100, None)  # 3000 and larger have issues with large-scale slopes
-    buffer_water = 2 * bp[0]
-    buffer_read = 1000  # 10 * bp[1]
-
-    dem, proj, geotrans, bufferpix = read_tile_buffer(
-        tile=tile, buffer=buffer_read, path=pathADEM, version=ADEMversiondef,
-        res=ADEMresdef)
-
-    ang = _angle_meridian(dem, proj, geotrans)
-    print(ang, np.rad2deg(ang))
-#     ang = np.deg2rad(90)
-#     dem = np.zeros((4096, 4096))
-#     dem[:, :] = 100 * np.real(np.exp(1j * (np.cos(ang) * np.arange(dem.shape[0])[:, np.newaxis] - np.sin(ang) * np.arange(dem.shape[1])[np.newaxis, :]) / 20))
-
-    dem, mask_gap = inpaint_mask(dem, geotrans, bp=bp)
-    geospatial = Geospatial(shape=dem.shape, proj=proj, geotrans=geotrans)
-    mask_water = match_watermask(geospatial, cutoffpct=5.0, buffer=buffer_water)
-    mask = np.logical_or(mask_water, mask_gap)
-
-    slope = slope_bp(dem, proj, geotrans, bp=bp, ang=ang)
-    slope[:, mask] = np.nan
-
-    sloped = slope_discrete_bp(dem, proj, geotrans, ang=ang, bp=bp)
-    sloped[:, mask] = np.nan
-
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(ncols=3)
-#     dem = bandpass(dem, geotrans, bp=bp)
-    ax[0].imshow(dem)
-    vlim = 0.3
-    ax[1].imshow(slope[0, ...], vmin=-vlim, vmax=vlim, cmap='bwr')
-    ax[2].imshow(sloped[0, ...], vmin=-vlim, vmax=vlim, cmap='bwr')
-
-#     nslopew = nslope[1700:2400, 1250:2500]
-    for slope_ in (slope, sloped):
-#         slopew = slope_[:, 1000:-1000, 1000:-1000]
-        slopew = slope_[:, bufferpix[0]:-bufferpix[0], bufferpix[1]:-bufferpix[1]]
-        print(bufferpix, slopew.shape)
-        print(asymindex(slopew), asymindex(slopew, indtype='logratio'))
-        print('     summary', np.nanmean(slopew[0, ...]),
-              np.nanpercentile(slopew[0, ...], (25, 50, 75)))  # also store the mean/median
-    # do scatterplot comparison
-    plt.show()
-
-def _batch_asymterr(
+def _batch_asymter(
         tilestruc, pathout, cellsize=(25e3, 25e3), bp=(100, 2000),
         indtypes=['median'], water_cutoffpct=5.0, bootstrap_se=False, N_bootstrap=100,
         noslope=False, overwrite=False, **kwargs):
     tile = tilestruc.tile
-    fnout = os.path.join(pathout, f'{tilestr(tile)}.p')
+    fnout = os.path.join(pathout, f'{adem_tilestr(tile)}.p')
     if not os.path.exists(fnout): print(fnout)
     if not os.path.exists(fnout) or overwrite:
         ptslist = list(tilestruc.pts)
@@ -336,11 +289,11 @@ def _write_geotiff(pathout, scenname, grid, asyminds, geotrans, proj, indtype='m
     print(fnout)
     save_geotiff(asymindarr, fnout, geotransform=geotrans, proj=proj)
 
-def batch_asymterr(
+def batch_asymter(
         scenname, indtypes=['median'], cellsize=(25e3, 25e3), bp=(100, 2000),
         spacing=None, water_cutoffpct=5.0, bootstrap_se=False, N_bootstrap=100, 
-        pathind=pathindices, noslope=False, overwrite=False, n_jobs=-1, **kwargs):
-    from grids import gridtiles, create_grid, corner0, spacingdef, corner1, EPSGdef
+        pathind=path_indices, noslope=False, overwrite=False, n_jobs=-1, **kwargs):
+    from asymter import gridtiles, create_grid, corner0, spacingdef, corner1, EPSGdef
     if spacing is None:
         spacing = spacingdef
     grid = create_grid(spacing=spacing, corner0=corner0, corner1=corner1)
@@ -351,7 +304,7 @@ def batch_asymterr(
     gt = gridtiles(grid)
     def _process(tilestruc):
         try:
-            res = _batch_asymterr(
+            res = _batch_asymter(
                 tilestruc, pathout, cellsize=cellsize, bp=bp, indtypes=indtypes,
                 water_cutoffpct=water_cutoffpct, bootstrap_se=bootstrap_se,
                 N_bootstrap=N_bootstrap, noslope=noslope, overwrite=overwrite, **kwargs)
@@ -376,20 +329,6 @@ def batch_asymterr(
     for indtype in indtypes_:  # add se
         _write_geotiff(pathout, scenname, grid, asyminds, geotrans, proj, indtype=indtype)
 
-if __name__ == '__main__':
-    spacing_hr = (5e3, -5e3)
-    indtypes = [
-        'median', 'logratio', 'roughness', 'medianEW', 'logratioEW', 'N', 'N_logratio']
-    indtypes_dem = ['ruggedness']
-#     batch_asymterr('bandpass', indtypes=indtypes, cellsize=(25e3, 25e3), bp=(100, 2000),
-#         water_cutoffpct=5.0, overwrite=False, bootstrap_se=True, N_bootstrap=25, n_jobs=4)
-#     batch_asymterr('lowpass', indtypes=indtypes, cellsize=(25e3, 25e3), bp=(100, None),
-#         water_cutoffpct=5.0, overwrite=False, bootstrap_se=True, N_bootstrap=25, n_jobs=4)
-#     batch_asymterr('raw', indtypes=indtypes_dem, cellsize=(25e3, 25e3), bp=(100, 2000),
-#         water_cutoffpct=5.0, overwrite=False, bootstrap_se=False, noslope=True, n_jobs=4)
-    batch_asymterr('bandpass0', indtypes=indtypes, cellsize=(25e3, 25e3), bp=(100, 2000),
-        water_cutoffpct=5.0, overwrite=False, bootstrap_se=True, minslope=0.0, 
-        N_bootstrap=25, n_jobs=8)
-    batch_asymterr('bandpass_hr', indtypes=indtypes, cellsize=(10e3, 10e3), bp=(100, 2000),
-        spacing=spacing_hr, water_cutoffpct=5.0, overwrite=False, bootstrap_se=True, 
-        minslope=0.0, N_bootstrap=25, n_jobs=8)
+
+    
+    

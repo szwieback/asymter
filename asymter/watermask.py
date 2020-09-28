@@ -10,16 +10,15 @@ import itertools
 from osgeo import gdal
 import numpy as np
 
-from IO import resample_gdal, read_gdal, enforce_directory
-from paths import pathwm
+from asymter import path_wm, resample_gdal, enforce_directory
 
-pathwmmerged = os.path.join(pathwm, 'merged')
+pathwmmerged = os.path.join(path_wm, 'merged')
 patterndef = ('occurrence', 'occurrence_{0}_{1}v1_1_2019.tif')
 url0 = 'https://storage.googleapis.com/global-surface-water/downloads2019v2/'
 fnvrt = os.path.join(pathwmmerged, 'merged.vrt')
 
-def download_single(
-        tile=('160W', '70N'), pathlocal=pathwm, pattern=patterndef, overwrite=False):
+def download_single_watermask(
+        tile=('160W', '70N'), pathlocal=path_wm, pattern=patterndef, overwrite=False):
     fn = pattern[1].format(*tile)
     fnlocal = os.path.join(pathlocal, fn)
     if overwrite or not os.path.exists(fnlocal):
@@ -28,18 +27,18 @@ def download_single(
         with open(fnlocal, 'wb') as f:
             f.write(response.content)
 
-def download_Arctic(pathlocal=pathwm, pattern=patterndef, overwrite=False):
+def download_arctic_watermask(pathlocal=path_wm, pattern=patterndef, overwrite=False):
     t0 = [f'{lon0}{di}' for lon0 in range(0, 190, 10) for di in ('E', 'W')]
     t1 = ['70N', '80N']
     for tile in itertools.product(t0, t1):
         try:
             assert tile[0] not in ('0W', '180E')
-            download_single(
+            download_single_watermask(
                 tile=tile, pathlocal=pathlocal, pattern=pattern, overwrite=overwrite)
         except:
             print(f'could not download {tile}')
 
-def panArctic_virtual(pattern=patterndef, fnvrt=fnvrt, pathwm=pathwm):
+def virtual_arctic_watermask(pattern=patterndef, fnvrt=fnvrt, pathwm=path_wm):
     import glob
     enforce_directory(os.path.dirname(fnvrt))
     inputtif = glob.glob(os.path.join(pathwm, pattern[1].format('*', '*')))
@@ -57,7 +56,7 @@ def match_watermask(geospatial, fnvrt=fnvrt, cutoffpct=5.0, buffer=100):
     return wm
 
 if __name__ == '__main__':
-#     download_Arctic()
-    panArctic_virtual()
+#     download_arctic_watermask()
+    virtual_arctic_watermask()
 #     pass
 
