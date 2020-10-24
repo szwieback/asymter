@@ -27,5 +27,3 @@ if __name__ == '__main__':
 #     batch_asymter('bandpass_hr', indtypes=indtypes, cellsize=(10e3, 10e3), bp=(100, 2000),
 #         spacing=spacing_hr, water_cutoffpct=5.0, overwrite=False, bootstrap_se=True, 
 #         N_bootstrap=25, n_jobs=8)
-    
-    # perhaps change default spacing

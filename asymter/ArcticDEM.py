@@ -50,7 +50,8 @@ def adem_tile_virtual_raster(
                   VRTNodata=np.nan)
 
 def read_adem_tile_buffer(
-        tile=(52, 19), buffer=2e4, path=path_adem, res=adem_defres, version=adem_defversion):
+        tile=(52, 19), buffer=2e4, path=path_adem, res=adem_defres, 
+        version=adem_defversion):
     from itertools import product
     dem_, proj, geotrans = read_adem_tile(tile=tile, path=path, res=res, version=version)
     # determine coords
@@ -99,7 +100,8 @@ def download_adem_tile(
                 print(f'Could not download {url}')
 
 def download_all_adem_tiles(
-        tilemax=74, path=path_adem, res=adem_defres, version=adem_defversion, overwrite=False):
+        tilemax=74, path=path_adem, res=adem_defres, version=adem_defversion, 
+        overwrite=False):
     from itertools import product
     tilenos = range(1, tilemax + 1)
     for tile in product(tilenos, tilenos):

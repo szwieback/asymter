@@ -47,6 +47,8 @@ def resample_gdal(
             src.SetProjection(inproj)
             for jb, arr_band in enumerate(np.reshape(inarr, (n_bands,) + inshape)):
                 src.GetRasterBand(jb + 1).WriteArray(arr_band.astype(dt_np[datatype]))
+            if datatype=='float32':
+                src.GetRasterBand(1).SetNoDataValue(np.nan)
         else:
             n_bands = src.RasterCount
         dst = gdal.GetDriverByName('GTiff').Create(

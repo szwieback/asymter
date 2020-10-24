@@ -17,3 +17,7 @@ else:
 path_adem = os.path.join(path0, 'ArcticDEM')
 path_wm = os.path.join(path0, 'watermask')
 path_indices = os.path.join(path0, 'indices')
+path_explanatory_ = os.path.join(path0, 'explanatory')
+path_explanatory = {'soil': os.path.join(path_explanatory_, 'soil'),
+                    'resampled': os.path.join(path_explanatory_, 'resampled'),
+                    'glacier': os.path.join(path_explanatory_, 'glacier')}
