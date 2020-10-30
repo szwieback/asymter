@@ -20,7 +20,7 @@ def zero_pad(arr, pct=25):
     shapeout = (np.array(arr.shape) * (1 + pct / 100))
     shapeout = 2 ** (np.floor(np.log2(shapeout)) + 1)
     shapeout = tuple(shapeout.astype(np.uint32))
-    arr_zp = np.zeros(shapeout, dtype=arr.dtype)
+    arr_zp = np.zeros(shapeout, dtype=arr.dtype) + np.nanmean(arr)
     arr_zp[0:arr.shape[0], 0:arr.shape[1]] = arr
     return arr_zp
 
@@ -130,7 +130,7 @@ def _median_asymindex(slope, indtype='median'):
     return asymi
 
 def _logratio_asymindex(
-        slope, minslope=0.05, aspthresh=1, indtype='logratio', count=False):
+        slope, minslope=0.04, aspthresh=1.0, indtype='logratio', count=False):
     import warnings
     if indtype == 'logratioEW':
         slope_ = np.flip(slope, axis=0)
@@ -291,7 +291,7 @@ def _write_geotiff(pathout, scenname, grid, asyminds, geotrans, proj, indtype='m
 
 def batch_asymter(
         scenname, indtypes=['median'], cellsize=(25e3, 25e3), bp=(100, 2000),
-        spacing=None, water_cutoffpct=5.0, bootstrap_se=False, N_bootstrap=100, 
+        spacing=None, water_cutoffpct=25.0, bootstrap_se=False, N_bootstrap=100, 
         pathind=path_indices, noslope=False, overwrite=False, n_jobs=-1, **kwargs):
     from asymter import gridtiles, create_grid, corner0, spacingdef, corner1, EPSGdef
     if spacing is None:
