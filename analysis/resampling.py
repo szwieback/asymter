@@ -8,6 +8,7 @@ import numpy as np
 from collections import defaultdict
 import ogr
 import osr
+import subprocess
 
 from setup import setup_path
 setup_path()
@@ -115,6 +116,10 @@ def max_glacial_extent(fnout=None, fnoutvec=None):
             vlayer.CreateField(fd)
             field = vlayer.GetLayerDefn().GetFieldIndex('dn')
             gdal.Polygonize(band, band, vlayer, field, [], callback=None)
+            fnoutvec_ = os.path.splitext(fnoutvec)[0] + '_simp.gpkg'
+            simplifyargs = [
+                'ogr2ogr', '-f', 'GPKG', fnoutvec_, fnoutvec, '-simplify', '40e3']
+            subprocess.check_output(simplifyargs)
 
 if __name__ == '__main__':
     fnsoil = os.path.join(path_explanatory['resampled'], 'soil.tif')
