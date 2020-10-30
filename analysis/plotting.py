@@ -15,7 +15,7 @@ path_figures = '/home/simon/Work/asymter/figures'
 
 def prepare_figure(
         nrows=1, ncols=1, figsize=(1.7, 0.8), figsizeunit='col', sharex='col', sharey='row',
-        squeeze=True, bottom=0.1, left=0.15, right=0.95, top=0.95, hspace=0.5, wspace=0.1, 
+        squeeze=True, bottom=0.10, left=0.15, right=0.95, top=0.95, hspace=0.5, wspace=0.1, 
         remove_spines=True, gridspec_kw=None, subplot_kw=None):
     plt.rc('font', **{'size':globfigparams['fontsize'], 'family':globfigparams['family']})
     plt.rcParams['text.usetex'] = globfigparams['usetex']

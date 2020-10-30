@@ -11,7 +11,9 @@ from asymter import path_indices, path_explanatory, read_gdal
 fnexplandict = {'ruggedness': os.path.join(path_indices, 'raw', 'raw_ruggedness.tif'),
                 'soil': os.path.join(path_explanatory['resampled'], 'soil.tif'),
                 'prec': os.path.join(path_explanatory['resampled'], 'prec.tif'),
-                'temp': os.path.join(path_explanatory['resampled'], 'temp10.tif')}
+                'temp': os.path.join(path_explanatory['resampled'], 'temp10.tif'),
+                'glacier': os.path.join(
+                    path_explanatory['resampled'], 'glacier_simp.gpkg')}
 logsdict = {'ruggedness': True, 'asym': False, 'temp': False, 'prec': True, 'soil': True}
 
 def read_mask(fnexplandict=fnexplandict, selimit=None, erosion_iterations=None):
@@ -163,11 +165,11 @@ def plot_kd(fnout):
         'bgcol': ('#d0d0d0', '#d0d0d0'), 'cmap': (cc.cm['bwy'], cc.cm['CET_CBL1']),
         'vmax': (0.07, 0.15), 'vmin': (-0.07, 0.00), 'ylim': (-17, 3),
         'yticks': (-15, -10, -5, 0), 'cticks': ([-0.05, 0.0, 0.05], [0.0, 0.05, 0.1, 0.15])}
-    scenname = 'bandpass'
+    scenname = 'bandpass004'#'bandpass002'
     index = 'logratio'
     maxse = 0.02
     gridsize = 513
-    cutoff = 0.02
+    cutoff = 0.02#0.02
     fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
     fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
     selimit = (fnindexse, maxse)
@@ -184,11 +186,11 @@ def plot_kd(fnout):
         selimit=selimit, gridsize=gridsize, cutoff=cutoff, label='everywhere')
     _plot_kd_column(
         axs[:, 1], fnindex, fnexplandict, {**pd, **pd_}, explannames=('temp', 'ruggedness'),
-        selimit=selimit, gridsize=gridsize, cutoff=cutoff, restrict=[('soil', 0.0, 1.5)],
+        selimit=selimit, gridsize=gridsize, cutoff=cutoff, restrict=[('soil', 0.00, 1.0)],
         label='thin soil')
     _plot_kd_column(
         axs[:, 2], fnindex, fnexplandict, {**pd, **pd_}, explannames=('temp', 'ruggedness'),
-        selimit=selimit, gridsize=gridsize, cutoff=cutoff, restrict=[('soil', 2.5, 1000.0)],
+        selimit=selimit, gridsize=gridsize, cutoff=cutoff, restrict=[('soil', 1.5, 1000.0)],
         label='thick soil')
     xticks = (300, 1000)
     xmticks = (100, 200, 400, 500, 600, 700, 800, 900, 1100)

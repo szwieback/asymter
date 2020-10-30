@@ -5,79 +5,143 @@ Created on Oct 23, 2020
 '''
 import os
 import cartopy.crs as ccrs
-import cartopy
 import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
-import osr
+import matplotlib.path as mpath
+import copy
 import numpy as np
 import colorcet as cc
+import geopandas
 
 from plotting import prepare_figure, path_figures
 from asymter import path_indices, read_gdal
-from kd import read_mask
+from kd import read_mask, fnexplandict
 
-scenname = 'bandpass'
-index = 'logratio'
-maxse = 0.02
-fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
-im, proj, geotrans = read_gdal(fnindex)
-fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
-selimit = (fnindexse, maxse)
-mask = read_mask(selimit=selimit, erosion_iterations=None)
-im[np.logical_not(mask)] = np.nan
-# extent = (geotrans[0], geotrans[0] + im.shape[1] * geotrans[1],
-#           geotrans[3] + im.shape[0] * geotrans[5], geotrans[3])
-# ccrsproj = ccrs.Stereographic(central_longitude=-45, true_scale_latitude=70,
-#                               central_latitude=90, false_easting=0, false_northing=0)
-def gamma(val, exponent=0.5):
+pc = ccrs.PlateCarree()
+# hack!
+ccrsproj = ccrs.Stereographic(
+    central_longitude=-135, true_scale_latitude=70, central_latitude=90, false_easting=0,
+    false_northing=0)
+ccrs3413 = ccrs.Stereographic(
+    central_longitude=-45, true_scale_latitude=70, central_latitude=90, false_easting=0,
+    false_northing=0)
+ocean_hr = cfeature.NaturalEarthFeature('physical', 'ocean', '50m')
+lakes_hr = cfeature.NaturalEarthFeature('physical', 'lakes', '50m')
+
+def gamma(val, exponent=0.50):
     return np.sign(val) * np.abs(val) ** exponent
-import matplotlib.path as mpath
-import copy
+
 # horrible hack to rotate image while avoiding explicit coordinate conversion
 def transform(im):
     return im.T
-extent = (-geotrans[3], -geotrans[3] - im.shape[0] * geotrans[5],
-          geotrans[0] + im.shape[1] * geotrans[1], geotrans[0])
-ccrsproj = ccrs.Stereographic(central_longitude=-135, true_scale_latitude=70,
-                              central_latitude=90, false_easting=0, false_northing=0)
 
-pc = ccrs.PlateCarree()
-fig, ax = prepare_figure(subplot_kw={'projection': ccrsproj})
+def _draw_panel(
+        im, fig, ax, circle, ccrsproj, extent=None, cmap=None, vmax=0.3, vmin=None,
+        label=None, ticks=None, ticklabels=None):
+    colw = '#d8dde3'  # '#d0d5dd'
+    cbpos = {'x': 0.03, 'dx': 0.35, 'dy': 0.02, 'labx': 0.5, 'laby':-4.0, 'y':-0.03}
+    ax.set_extent((-180, 180, 59.95, 90), crs=pc)
+    ax.set_boundary(circle, transform=ax.transAxes)
+    if vmin is None:
+        vmin = -vmax
+    aim = ax.imshow(transform(im), extent=extent, origin='upper', transform=ccrsproj,
+                    vmin=vmin, vmax=vmax, cmap=cmap)
+    ax.coastlines(color='#000000', zorder=3, lw=0.2, resolution='110m', alpha=0.15)
+    ax.add_feature(ocean_hr, facecolor=colw, edgecolor='none')
+    ax.add_feature(lakes_hr, facecolor=colw)
+    ax.add_feature(
+        lakes_hr, facecolor='none', edgecolor='#000000', lw=0.2, alpha=0.15)
+    ax.gridlines(
+        ylocs=(70, 80), xlocs=np.arange(-180, 180, 45), linewidth=0.2, color='#aaaaaa',
+        alpha=0.5)
+    for lat, latpos in [(80, 80.5), (70, 70.3)]:
+        ax.text(-135.2, latpos, str(lat), transform=pc, ha='right', va='bottom')
+    for lon, londpos in [(0, 0), (-45, -1), (-90, 0), (90, 0), (135, -1), (180, -1)]:
+        ax.text(lon, 58 + londpos, str(lon), transform=pc, ha='center', va='center')
 
-ax.set_extent((-180, 180, 59.95, 90), crs=pc)
+    pos = ax.properties()['position']
+    rect_cax = (pos.x0, pos.y0 + cbpos['y'], pos.x1 - pos.x0, cbpos['dy'])
 
-theta = np.linspace(0, 2*np.pi, 100)
-center, radius = [0.5, 0.5], 0.5
-verts = np.vstack([np.sin(theta), np.cos(theta)]).T
-circle = mpath.Path(verts * radius + center)
-ax.set_boundary(circle, transform=ax.transAxes)
+    cax = fig.add_axes(rect_cax)
+    cbar = fig.colorbar(
+        aim, cax=cax, orientation='horizontal', ticks=ticks)
+    if label is not None:
+        cax.text(0.5, -2.8, label, transform=cax.transAxes, va='baseline', ha='center')
+    if ticklabels is not None:
+        cbar.ax.set_xticklabels(ticklabels)
 
-cmap = copy.copy(cc.cm['bwy'])
-cmap.set_bad('#d0d0d0', 1.)
-colw = '#d8dde3'#'#d0d5dd'
-vmax = 0.3
-ax.imshow(transform(gamma(im)), extent=extent, origin='upper', transform=ccrsproj, 
-          vmin=gamma(-vmax), vmax=gamma(vmax), cmap=cmap)
-cl = ax.coastlines(color='#000000', zorder=3, lw=0.2, resolution='110m', alpha=0.15)
-# ax.add_feature(cartopy.feature.OCEAN, color=colw, zorder=1)
-ocean_hr = cfeature.NaturalEarthFeature('physical', 'ocean', '50m')
-ax.add_feature(ocean_hr, facecolor=colw, edgecolor='none')
-ax.add_feature(cfeature.LAKES, facecolor=colw)
-ax.add_feature(cfeature.LAKES, facecolor='none', edgecolor='#000000', lw=0.2, alpha=0.15)
-gl = ax.gridlines(
-    ylocs=(70, 80), xlocs=np.arange(-180, 180, 45), linewidth=0.2, color='#aaaaaa', 
-    alpha=0.5)
-gl.top_labels = True
-gl.left_labels = True
-ax.text(-135.2, 80.5, '80', transform=pc, ha='right', va='bottom')
-ax.text(-135.2, 70.3, '70', transform=pc, ha='right', va='bottom')
-ax.text(0, 58, '0', transform=pc, ha='center', va='center')
-ax.text(-45, 57, '-45', transform=pc, ha='center', va='center')
-ax.text(-90, 58, '-90', transform=pc, ha='center', va='center')
-ax.text(90, 58, '90', transform=pc, ha='center', va='center')
-ax.text(135, 57, '135', transform=pc, ha='center', va='center')
-ax.text(180, 57, '180', transform=pc, ha='center', va='center')
+def maps(scenname='bandpass004', index='logratio', maxse=0.02, fnout=None):
+    fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
+    im, proj, geotrans = read_gdal(fnindex)
+    fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
+    selimit = (fnindexse, maxse)
+    mask = read_mask(selimit=selimit, erosion_iterations=None)
+    im[np.logical_not(mask)] = np.nan
 
-# plt.show()
-fig.savefig(os.path.join(path_figures, 'maptest.pdf'), dpi=600)
+    extent = (-geotrans[3], -geotrans[3] - im.shape[0] * geotrans[5],
+              geotrans[0] + im.shape[1] * geotrans[1], geotrans[0])
+
+    fig, axs = prepare_figure(
+        nrows=2, ncols=2, figsize=(1.7, 1.7), subplot_kw={'projection': ccrsproj},
+        remove_spines=False, hspace=0.37, wspace=0.20, left=0.020, bottom=0.095,
+        right=0.980, top=0.990)
+
+    theta = np.linspace(0, 2 * np.pi, 100)
+    center, radius = [0.5, 0.5], 0.5
+    verts = np.vstack([np.sin(theta), np.cos(theta)]).T
+    circle = mpath.Path(verts * radius + center)
+
+    cmap = copy.copy(cc.cm['bwy'])
+    cmap.set_bad('#d0d0d0', 1.)
+    ticks = [-0.4, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.4]
+    ticklabels = ['-0.4', '', '-0.2', '-0.1', '0.0', '0.1', '0.2', '', '0.4']
+    _draw_panel(
+        gamma(im), fig, axs[0, 0], circle, ccrsproj, cmap=cmap, vmax=gamma(0.4),
+        label='asymmetry $a$ [-]', extent=extent, ticks=gamma(ticks), ticklabels=ticklabels)
+
+    imse, _, _ = read_gdal(fnindexse)
+    imse[np.logical_not(mask)] = np.nan
+    cmap = copy.copy(cc.cm['CET_CBL1'])
+    cmap.set_bad('#d0d0d0', 1.)
+    ticks = [0.0, 0.003, 0.01, 0.02]
+    _draw_panel(
+        gamma(imse), fig, axs[1, 0], circle, ccrsproj, cmap=cmap, vmin=gamma(0.0),
+        vmax=gamma(0.02), label='asymmetry standard error [-]', extent=extent,
+        ticks=gamma(ticks), ticklabels=ticks)
+
+    imT, _, _ = read_gdal(fnexplandict['temp'])
+    cmap = copy.copy(cc.cm['CET_CBL1'])
+    cmap.set_bad('#d0d0d0', 1.)
+    ticks = [-15, -10, -5, 0, 5]
+    _draw_panel(
+        imT, fig, axs[0, 1], circle, ccrsproj, cmap=cmap, vmin=-18, vmax=8,
+        label='temperature $T$ [$^{\\circ}\\mathrm{C}$]', extent=extent,
+        ticks=ticks, ticklabels=ticks)
+
+    imr, _, _ = read_gdal(fnexplandict['ruggedness'])
+    cmap = copy.copy(cc.cm['CET_CBL1'])
+    rt = lambda x: np.log10(x)
+    cmap.set_bad('#d0d0d0', 1.)
+    ticks = [30, 100, 300, 1000]
+    _draw_panel(
+        rt(imr), fig, axs[1, 1], circle, ccrsproj, cmap=cmap, vmin=rt(20),
+        vmax=rt(2000), label='ruggedness $r$ [m]', extent=extent,
+        ticks=rt(ticks), ticklabels=ticks)
+    ge = geopandas.read_file(fnexplandict['glacier'])
+    gemask = ge.area > (35e3) ** 2
+    ge_ = ge.loc[gemask]
+    for ax in (axs[1, 1],):
+        ax.add_geometries(
+            ge_.geometry, crs=ccrs3413, edgecolor='#ffffff', facecolor='none', lw=1.0,
+            alpha=1.0, zorder=5)
+    if fnout is not None:
+        fig.savefig(fnout, dpi=450)
+
+
+if __name__ == '__main__':
+    # add: a, b, c, d
+    # run with more slope options
+    maps(fnout=os.path.join(path_figures, 'maps.pdf'))
+#     ge = geopandas.read_file(fnexplandict['glacier'])
+#     print([x for x in ge.geometry[0]])
 
