@@ -37,8 +37,8 @@ def _angle_meridian(dem, proj, geotrans):
     assert 'Polar_Stereographic' in proj
 #     assert proj == projdef
     assert geotrans[2] == geotrans[4] == 0
-    xm = geotrans[3] + np.arange(dem.shape[0]) * geotrans[5] // 2
-    ym = geotrans[0] + np.arange(dem.shape[1]) * geotrans[1] // 2
+    xm = geotrans[3] + dem.shape[0] * geotrans[5] // 2
+    ym = geotrans[0] + dem.shape[1] * geotrans[1] // 2
     ang = np.arctan2(xm, ym)
     return ang
 
