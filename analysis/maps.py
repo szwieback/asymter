@@ -15,7 +15,8 @@ import geopandas
 
 from plotting import prepare_figure, path_figures
 from asymter import path_indices, read_gdal
-from kd import read_mask, fnexplandict
+from kd import read_mask
+from paths import fnexplandict
 
 pc = ccrs.PlateCarree()
 # hack!
@@ -144,13 +145,12 @@ def maps(scenname='bandpass', index='logratio', maxse=0.02, fnout=None):
     if fnout is not None:
         fig.savefig(fnout, dpi=450)
 
-def wind_plot(fnout=None):
-    mask = read_mask(erosion_iterations=None)
+def wind_precip_plot(fnout=None):
     imw, proj, geotrans = read_gdal(fnexplandict['wind'])
 
-    fig, ax = prepare_figure(
-        nrows=1, ncols=1, figsize=(0.92, 0.92), subplot_kw={'projection': ccrsproj},
-        remove_spines=False, bottom=0.14, top=0.97, left=0.07, right=0.93)
+    fig, axs = prepare_figure(
+        nrows=1, ncols=2, figsize=(1.70, 0.83), subplot_kw={'projection': ccrsproj},
+        remove_spines=False, bottom=0.15, top=0.99, left=0.03, right=0.97, wspace=0.20)
     circle = _circle_extent()
 
     extent = hack_extent(geotrans, imw[1, ...])
@@ -159,17 +159,26 @@ def wind_plot(fnout=None):
     cmap.set_bad('#d0d0d0', 1.)
     ticks = [-8, -4, 0, 4, 8]
     _draw_panel(
-        imw[1, ...], fig, ax, circle, ccrsproj, cmap=cmap, vmin=-8, vmax=8,
+        imw[1, ...], fig, axs[0], circle, ccrsproj, cmap=cmap, vmin=-8, vmax=8,
         label='meridional wind [$\\mathrm{m}\\,\\mathrm{s}^{-1}$]', extent=extent,
         ticks=ticks, ticklabels=ticks, clabelypos=-5.1)
+
+    imp, _, _ = read_gdal(fnexplandict['prec'])
+#     imw[:, np.logical_not(mask)] = np.nan
+    cmap = copy.copy(cc.cm['CET_CBL1'])
+    cmap.set_bad('#d0d0d0', 1.)
+    ticks = [100, 300, 1000]
+    _draw_panel(
+        np.log10(imp), fig, axs[1], circle, ccrsproj, cmap=cmap, vmin=np.log10(50), 
+        vmax=np.log10(2000), label='precipitation [$\\mathrm{mm}$]', extent=extent,
+        ticks=np.log10(ticks), ticklabels=ticks, clabelypos=-5.1)
+
     if fnout is not None:
         fig.savefig(fnout, dpi=450)
-
-
 
 if __name__ == '__main__':
     # add: a, b, c, d
     # run with more slope options
 #     maps(fnout=os.path.join(path_figures, 'maps.pdf'))
 
-    wind_plot(fnout=os.path.join(path_figures, 'mapwind.pdf'))
+    wind_precip_plot(fnout=os.path.join(path_figures, 'mapwindprecip.pdf'))

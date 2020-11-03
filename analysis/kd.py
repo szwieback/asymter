@@ -6,15 +6,9 @@ Created on Oct 20, 2020
 import os
 import numpy as np
 
-from asymter import path_indices, path_explanatory, read_gdal
+from asymter import path_indices, read_gdal
+from paths import fnexplandict, path_explanatory
 
-fnexplandict = {'ruggedness': os.path.join(path_indices, 'raw', 'raw_ruggedness.tif'),
-                'soil': os.path.join(path_explanatory['resampled'], 'soil.tif'),
-                'prec': os.path.join(path_explanatory['resampled'], 'prec.tif'),
-                'temp': os.path.join(path_explanatory['resampled'], 'temp10.tif'),
-                'wind': os.path.join(path_explanatory['resampled'], 'wind.tif'),
-                'glacier': os.path.join(
-                    path_explanatory['resampled'], 'glacier_simp.gpkg')}
 logsdict = {'ruggedness': True, 'asym': False, 'temp': False, 'prec': True, 'soil': True}
 
 def read_mask(fnexplandict=fnexplandict, selimit=None, erosion_iterations=None):

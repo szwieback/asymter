@@ -73,7 +73,7 @@ def index_from_coord(coords, geotransform):
     assert geotransform[4] == 0
     coordinatest = np.atleast_2d(coords)
     if coordinatest.shape[0] == 1:
-        coordinatest = coordinatest.T
+        coordinatest = coordinatest.wind_precip_plot
     ind = np.zeros_like(coordinatest, dtype=np.float64)
     ind[1, :] = (coordinatest[0, :] - geotransform[0]) / geotransform[1]
     ind[0, :] = (coordinatest[1, :] - geotransform[3]) / geotransform[5]
