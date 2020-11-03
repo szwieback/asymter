@@ -14,7 +14,7 @@ from setup import setup_path
 setup_path()
 from asymter import (
     path_explanatory, path_indices, resample_gdal, geospatial_from_file,
-    save_geotiff, read_gdal)
+    save_geotiff, read_gdal, proj_from_epsg)
 
 fnref = os.path.join(path_indices, 'raw', 'raw_ruggedness.tif')
 geospatial = geospatial_from_file(fnref)
@@ -67,7 +67,7 @@ def resample_climate(pathin, prod='temp10', fnout=None, thresh=-1000):
 
     for days, month in zip(modays, range(1, 13)):
         if not total:
-            weight = fac * days / days_sum # mean
+            weight = fac * days / days_sum  # mean
         else:
             weight = fac
         fnin = os.path.join(pathin, fun_fnchelsa(month))
@@ -88,8 +88,8 @@ def resample_climate(pathin, prod='temp10', fnout=None, thresh=-1000):
     return imw
 
 def max_glacial_extent(fnout=None, fnoutvec=None):
-    periods = ['30 ka', '35 ka', '40 ka', '45 ka', 'MIS 4', 'MIS 5a', 'MIS 5b', 
-               'MIS 5c', 'MIS 5d', 'MIS 6', 'MIS 8', 'MIS 10', 'MIS 12', 'MIS 16', 
+    periods = ['30 ka', '35 ka', '40 ka', '45 ka', 'MIS 4', 'MIS 5a', 'MIS 5b',
+               'MIS 5c', 'MIS 5d', 'MIS 6', 'MIS 8', 'MIS 10', 'MIS 12', 'MIS 16',
                'MIS 20-24']
     import gdal
     path0 = path_explanatory['glacier']
@@ -105,13 +105,14 @@ def max_glacial_extent(fnout=None, fnoutvec=None):
         rextent = np.logical_or(rextent, rperiod)
     if fnout is not None:
         save_geotiff(
-            rextent.astype(np.uint8), fnout, geotransform=geospatial.geotrans, 
+            rextent.astype(np.uint8), fnout, geotransform=geospatial.geotrans,
             proj=geospatial.proj, datatype='uint8')
         if fnoutvec is not None:
             rds = gdal.Open(fnout, gdal.GA_ReadOnly)
             band = rds.GetRasterBand(1)
             vds = ogr.GetDriverByName('GPKG').CreateDataSource(fnoutvec)
-            vlayer = vds.CreateLayer('polygon', srs=osr.SpatialReference(wkt=geospatial.proj))
+            vlayer = vds.CreateLayer(
+                'polygon', srs=osr.SpatialReference(wkt=geospatial.proj))
             fd = ogr.FieldDefn('value', ogr.OFTInteger)
             vlayer.CreateField(fd)
             field = vlayer.GetLayerDefn().GetFieldIndex('dn')
@@ -121,6 +122,31 @@ def max_glacial_extent(fnout=None, fnoutvec=None):
                 'ogr2ogr', '-f', 'GPKG', fnoutvec_, fnoutvec, '-simplify', '40e3']
             subprocess.check_output(simplifyargs)
 
+def resample_wind(fnout=None):
+    import netCDF4 as nc
+    fn = os.path.join(path_explanatory['wind'], 'data.nc')
+    ds = nc.Dataset(fn)
+    months = np.array([1, 2, 12]) - 1
+    wind = np.array([np.mean(ds[var][:][months, 0, ...], axis=0) for var in ('u', 'v')])
+    inproj = proj_from_epsg(4326)
+    ingeotrans = (0.0, 2.5, 0.0, 90.0, 0.0, -2.5)
+
+    fnsoil = os.path.join(
+        path_explanatory['soil'], 'average_soil_and_sedimentary-deposit_thickness.tif')
+    gs = geospatial_from_file(fnsoil)
+
+    # two-step conversion needed because gdal reprojctimage is stupid
+    # cannot handle polar projections properly
+    imw = resample_gdal(
+        gs, inarr=wind, inproj=inproj, ingeotrans=ingeotrans, datatype='float32',
+        average=False)
+    imw = resample_gdal(
+        geospatial, inarr=imw, inproj=gs.proj, ingeotrans=gs.geotrans, datatype='float32',
+        average=True)
+    if fnout is not None:
+        save_geotiff(imw, fnout, proj=geospatial.proj, geotransform=geospatial.geotrans)
+    return imw
+
 if __name__ == '__main__':
     fnsoil = os.path.join(path_explanatory['resampled'], 'soil.tif')
 #     resample_soil(fnout=fnsoil)
@@ -129,6 +155,10 @@ if __name__ == '__main__':
 #     for prod in ['prec', 'temp10']:
 #         fnprod = os.path.join(path_explanatory['resampled'], f'{prod}.tif')
 #         resample_climate(pathin, prod=prod, fnout=fnprod)
-    fnglacier = os.path.join(path_explanatory['resampled'], 'glacier.tif')
-    fnglaciervec = os.path.join(path_explanatory['resampled'], 'glacier.gpkg')
-    max_glacial_extent(fnout=fnglacier, fnoutvec=fnglaciervec)
+#     fnglacier = os.path.join(path_explanatory['resampled'], 'glacier.tif')
+#     fnglaciervec = os.path.join(path_explanatory['resampled'], 'glacier.gpkg')
+#     max_glacial_extent(fnout=fnglacier, fnoutvec=fnglaciervec)
+
+    fnwind = os.path.join(path_explanatory['resampled'], 'wind.tif')
+    resample_wind(fnout=fnwind)
+

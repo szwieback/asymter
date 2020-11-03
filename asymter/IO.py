@@ -63,6 +63,7 @@ def resample_gdal(
                    'float32': gdalconst.GRA_Bilinear}[datatype]
         if average: intmode = gdalconst.GRA_Average
         gdal.ReprojectImage(src, dst, inproj, gs.proj, intmode)
+        
         resampled = dst.ReadAsArray()
         del dst
     return resampled

@@ -22,6 +22,8 @@ pc = ccrs.PlateCarree()
 ccrsproj = ccrs.Stereographic(
     central_longitude=-135, true_scale_latitude=70, central_latitude=90, false_easting=0,
     false_northing=0)
+hack_extent = lambda geotrans, im: (-geotrans[3], -geotrans[3] - im.shape[0] * geotrans[5],
+                                     geotrans[0] + im.shape[1] * geotrans[1], geotrans[0])
 ccrs3413 = ccrs.Stereographic(
     central_longitude=-45, true_scale_latitude=70, central_latitude=90, false_easting=0,
     false_northing=0)
@@ -37,10 +39,11 @@ def transform(im):
 
 def _draw_panel(
         im, fig, ax, circle, ccrsproj, extent=None, cmap=None, vmax=0.3, vmin=None,
-        label=None, ticks=None, ticklabels=None):
+        label=None, ticks=None, ticklabels=None, clabelypos=None):
     colw = '#d8dde3'  # '#d0d5dd'
     cbpos = {'x': 0.03, 'dx': 0.35, 'dy': 0.02, 'labx': 0.5, 'laby':-4.0, 'y':-0.03}
     ax.set_extent((-180, 180, 59.95, 90), crs=pc)
+    if clabelypos is None: clabelypos = -2.8
     ax.set_boundary(circle, transform=ax.transAxes)
     if vmin is None:
         vmin = -vmax
@@ -66,11 +69,19 @@ def _draw_panel(
     cbar = fig.colorbar(
         aim, cax=cax, orientation='horizontal', ticks=ticks)
     if label is not None:
-        cax.text(0.5, -2.8, label, transform=cax.transAxes, va='baseline', ha='center')
+        cax.text(0.5, clabelypos, label, transform=cax.transAxes, va='baseline', ha='center')
     if ticklabels is not None:
         cbar.ax.set_xticklabels(ticklabels)
+    return ax
 
-def maps(scenname='bandpass004', index='logratio', maxse=0.02, fnout=None):
+def _circle_extent():
+    theta = np.linspace(0, 2 * np.pi, 100)
+    center, radius = [0.5, 0.5], 0.5
+    verts = np.vstack([np.sin(theta), np.cos(theta)]).T
+    circle = mpath.Path(verts * radius + center)
+    return circle
+
+def maps(scenname='bandpass', index='logratio', maxse=0.02, fnout=None):
     fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
     im, proj, geotrans = read_gdal(fnindex)
     fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
@@ -78,18 +89,14 @@ def maps(scenname='bandpass004', index='logratio', maxse=0.02, fnout=None):
     mask = read_mask(selimit=selimit, erosion_iterations=None)
     im[np.logical_not(mask)] = np.nan
 
-    extent = (-geotrans[3], -geotrans[3] - im.shape[0] * geotrans[5],
-              geotrans[0] + im.shape[1] * geotrans[1], geotrans[0])
+    extent = hack_extent(geotrans, im)
 
     fig, axs = prepare_figure(
         nrows=2, ncols=2, figsize=(1.7, 1.7), subplot_kw={'projection': ccrsproj},
         remove_spines=False, hspace=0.37, wspace=0.20, left=0.020, bottom=0.095,
         right=0.980, top=0.990)
 
-    theta = np.linspace(0, 2 * np.pi, 100)
-    center, radius = [0.5, 0.5], 0.5
-    verts = np.vstack([np.sin(theta), np.cos(theta)]).T
-    circle = mpath.Path(verts * radius + center)
+    circle = _circle_extent()
 
     cmap = copy.copy(cc.cm['bwy'])
     cmap.set_bad('#d0d0d0', 1.)
@@ -137,11 +144,32 @@ def maps(scenname='bandpass004', index='logratio', maxse=0.02, fnout=None):
     if fnout is not None:
         fig.savefig(fnout, dpi=450)
 
+def wind_plot(fnout=None):
+    mask = read_mask(erosion_iterations=None)
+    imw, proj, geotrans = read_gdal(fnexplandict['wind'])
+
+    fig, ax = prepare_figure(
+        nrows=1, ncols=1, figsize=(0.92, 0.92), subplot_kw={'projection': ccrsproj},
+        remove_spines=False, bottom=0.14, top=0.97, left=0.07, right=0.93)
+    circle = _circle_extent()
+
+    extent = hack_extent(geotrans, imw[1, ...])
+#     imw[:, np.logical_not(mask)] = np.nan
+    cmap = copy.copy(cc.cm['bwy'])
+    cmap.set_bad('#d0d0d0', 1.)
+    ticks = [-8, -4, 0, 4, 8]
+    _draw_panel(
+        imw[1, ...], fig, ax, circle, ccrsproj, cmap=cmap, vmin=-8, vmax=8,
+        label='meridional wind [$\\mathrm{m}\\,\\mathrm{s}^{-1}$]', extent=extent,
+        ticks=ticks, ticklabels=ticks, clabelypos=-5.1)
+    if fnout is not None:
+        fig.savefig(fnout, dpi=450)
+
+
 
 if __name__ == '__main__':
     # add: a, b, c, d
     # run with more slope options
-    maps(fnout=os.path.join(path_figures, 'maps.pdf'))
-#     ge = geopandas.read_file(fnexplandict['glacier'])
-#     print([x for x in ge.geometry[0]])
+#     maps(fnout=os.path.join(path_figures, 'maps.pdf'))
 
+    wind_plot(fnout=os.path.join(path_figures, 'mapwind.pdf'))
