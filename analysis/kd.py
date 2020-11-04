@@ -11,6 +11,28 @@ from paths import fnexplandict, path_explanatory
 
 logsdict = {'ruggedness': True, 'asym': False, 'temp': False, 'prec': True, 'soil': True}
 
+def read_longitude(fnexplandict):
+    from asymter import geospatial_from_file
+    gs = geospatial_from_file(fnexplandict['ruggedness'])
+#     x = gs.geotrans[0] + np.arange(gs.shape[0]) * gs.geotrans[1]
+#     y = gs.geotrans[3] + np.arange(gs.shape[1]) * gs.geotrans[5]
+    x = gs.geotrans[3] + np.arange(gs.shape[0]) * gs.geotrans[5]
+    y = gs.geotrans[0] + np.arange(gs.shape[1]) * gs.geotrans[1]
+    lon = np.arctan2(x[:, np.newaxis], y[np.newaxis, :]) * 180 / np.pi + 45
+    lon[lon>180] -= 360 
+    return lon
+
+def read_region(fnexplandict):
+    lon = read_longitude(fnexplandict)
+    reg = np.zeros_like(lon, dtype=np.uint8) + 255
+    reg[np.logical_and(lon>=-165, lon<-124)] = 1 # W American
+    reg[np.logical_and(lon>=-124, lon<-62)] = 2 # C/E American
+    reg[np.logical_and(lon>=-62, lon<-22)] = 3 # Greenland
+    reg[np.logical_and(lon>=3, lon<60)] = 4 # European
+    reg[np.logical_and(lon>=60, lon<119)] = 5 # W/C Siberian A
+    reg[np.logical_or(lon>=119, lon<-165)] = 6 # Far Asian E
+    return reg
+
 def read_mask(fnexplandict=fnexplandict, selimit=None, erosion_iterations=None):
     from scipy.ndimage import binary_erosion
     mask = np.isfinite(read_gdal(fnexplandict['soil'])[0])
@@ -32,7 +54,12 @@ def assemble_data(
     if restrict is not None:
         for rname, rlow, rhigh in restrict:
             if isinstance(rname, str):
-                rdata, _, _ = read_gdal(fnexplandict[rname])
+                if rname == 'lon':
+                    rdata = read_longitude(fnexplandict)
+                elif rname == 'region':
+                    rdata = read_region(fnexplandict)
+                else:
+                    rdata, _, _ = read_gdal(fnexplandict[rname])
             else:
                 rdata, _, _ = read_gdal(fnexplandict[rname[0]])
                 rdata = rdata[rname[1], ...]
@@ -287,6 +314,76 @@ def plot_kd_soil(fnout):
             transform=ax.transAxes, bbox=bbox)
     fig.savefig(os.path.join(path_figures, fnout))
 
+def plot_kd_regions(fnout):
+    import matplotlib.pyplot as plt
+    from plotting import prepare_figure, path_figures
+    import colorcet as cc
+    from string import ascii_lowercase
+    pd = {
+        'bgcol': ('#d0d0d0', '#d0d0d0'), 'cmap': (cc.cm['bwy'], cc.cm['CET_CBL1']),
+        'vmax': (0.07, 0.30), 'vmin': (-0.07, 0.00), 'ylim': (-17, 0),
+        'yticks': (-15, -10, -5, 0), 'cticks': ([-0.05, 0.0, 0.05], [0.0, 0.1, 0.2, 0.3])}
+    scenname = 'bandpass'
+    index = 'logratio'
+    maxse = 0.02
+    gridsize = 129  # 513
+    cutoff = 0.02  # 0.02
+    fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
+    fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
+    selimit = (fnindexse, maxse)
+    fig, axs = prepare_figure(
+        nrows=2, ncols=4, figsize=(1.50, 0.92), sharex='col', sharey=True,
+        left=0.095, right=0.870, bottom=0.110, top=0.945, wspace=0.3, hspace=0.2,
+        remove_spines=False)
+    xticks = (30, 100, 1000)
+    xmticks = (40, 50, 60, 70, 80, 90, 200, 300, 400, 500, 600, 700, 800, 900)
+    pd_ = {'xlim': (1.4, 3.0), 'xticks': np.log10(xticks), 'xlabel': 'ruggedness $r$ [m]',
+           'xticklabels': xticks, 'xminorticks': np.log10(xmticks)}
+    _plot_kd_column(
+        axs[:, 0], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
+        explannames=('temp', 'ruggedness'), gridsize=gridsize, cutoff=cutoff, 
+        restrict=[('region', 1, 3)], label='America')
+    _plot_kd_column(
+        axs[:, 1], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
+        explannames=('temp', 'ruggedness'), gridsize=gridsize, cutoff=cutoff,
+        restrict=[('region', 4, 6)], label='Asia')
+    _plot_kd_column(
+        axs[:, 2], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
+        explannames=('temp', 'ruggedness'), gridsize=gridsize, cutoff=cutoff,
+        restrict=[('glacierras', 1, 1)], label='glaciated')
+    mps = _plot_kd_column(
+        axs[:, 3], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
+        explannames=('temp', 'ruggedness'), gridsize=gridsize, cutoff=cutoff,
+        restrict=[('glacierras', 0, 0)], label='unglaciated')
+    for ax in axs[:, 0]:
+        ax.text(
+            -0.56, 0.5, 'temperature $T$ [$^{\\circ}\\mathrm{C}$]',
+            transform=ax.transAxes, ha='left', va='center', rotation=90)
+    cbpos = {'x': 0.10, 'dx': 0.02, 'dy': 0.24, 'labx': 0.5, 'laby':-4.0, 'y': 0.02}
+    clabels = ('\\textbf{median} [-]', '\\textbf{spread} [-]')
+    for jax, ax in enumerate(axs[:, -1]):
+        pos = ax.properties()['position']
+        _y = (0.5 * (pos.y0 + pos.y1) - 0.5 * cbpos['dy'] - cbpos['y'])
+        rect_cax = (pos.x1 + cbpos['x'], _y, cbpos['dx'], cbpos['dy'])
+        cax = fig.add_axes(rect_cax)
+        cbar = fig.colorbar(
+            mps[jax], cax=cax, orientation='vertical', ticklocation='left',
+            ticks=pd['cticks'][jax])
+        ax.text(
+            1.43, 0.90, clabels[jax], ha='center', va='baseline', transform=ax.transAxes,
+            color='#000000')
+    bbox_ = {'facecolor': '#333333', 'edgecolor': 'none', 'boxstyle':'square,pad=0.12',
+             'alpha': 0.9}
+    for jax, ax in enumerate(axs.flatten(order='F')):
+        col = '#ffffff' if jax in (1, 3, 5, 7) else '#666666'
+        bbox = bbox_ if jax < 0 else None
+        ax.text(
+            0.04, 0.90, ascii_lowercase[jax] + ')', ha='left', va='baseline', color=col,
+            transform=ax.transAxes, bbox=bbox)
+#     fig.savefig(os.path.join(path_figures, fnout))
+    plt.show()
+
 if __name__ == '__main__':
-    plot_kd(fnout='kde.pdf')
-    plot_kd_soil(fnout='kdesoil.pdf')
+#     plot_kd(fnout='kde.pdf')
+#     plot_kd_soil(fnout='kdesoil.pdf')
+    plot_kd_regions(None)

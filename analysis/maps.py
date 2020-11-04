@@ -169,7 +169,7 @@ def wind_precip_plot(fnout=None):
     cmap.set_bad('#d0d0d0', 1.)
     ticks = [100, 300, 1000]
     _draw_panel(
-        np.log10(imp), fig, axs[1], circle, ccrsproj, cmap=cmap, vmin=np.log10(50), 
+        np.log10(imp), fig, axs[1], circle, ccrsproj, cmap=cmap, vmin=np.log10(50),
         vmax=np.log10(2000), label='precipitation [$\\mathrm{mm}$]', extent=extent,
         ticks=np.log10(ticks), ticklabels=ticks, clabelypos=-5.1)
 
@@ -180,5 +180,5 @@ if __name__ == '__main__':
     # add: a, b, c, d
     # run with more slope options
 #     maps(fnout=os.path.join(path_figures, 'maps.pdf'))
-
-    wind_precip_plot(fnout=os.path.join(path_figures, 'mapwindprecip.pdf'))
+#     wind_precip_plot(fnout=os.path.join(path_figures, 'mapwindprecip.pdf'))
+    pass
