@@ -8,10 +8,9 @@ from numpy.fft import fftshift, ifftshift, fft2, ifft2
 import os
 
 from asymter import (
-    Geospatial, gdal_cclip, save_object, load_object, enforce_directory, save_geotiff, 
-    proj_from_epsg, path_adem, path_indices, match_watermask, read_adem_tile_buffer, 
+    Geospatial, gdal_cclip, save_object, load_object, enforce_directory, save_geotiff,
+    proj_from_epsg, path_adem, path_indices, match_watermask, read_adem_tile_buffer,
     adem_tile_available, adem_defversion, adem_definvalid, adem_defres, adem_tilestr)
-
 
 indices_bootstrap = ['median', 'logratio', 'roughness', 'medianEW', 'logratioEW']
 seed = 1
@@ -37,9 +36,9 @@ def _angle_meridian(dem, proj, geotrans):
     assert 'Polar_Stereographic' in proj
 #     assert proj == projdef
     assert geotrans[2] == geotrans[4] == 0
-    xm = geotrans[3] + dem.shape[0] * geotrans[5] // 2
-    ym = geotrans[0] + dem.shape[1] * geotrans[1] // 2
-    ang = np.arctan2(xm, ym)
+    xm = geotrans[0] + geotrans[1] * dem.shape[1] // 2
+    ym = geotrans[3] + geotrans[5] * dem.shape[0] // 2
+    ang = np.arctan2(-xm, -ym)
     return ang
 
 def _gaussian(sfreq, e_folding):
@@ -291,7 +290,7 @@ def _write_geotiff(pathout, scenname, grid, asyminds, geotrans, proj, indtype='m
 
 def batch_asymter(
         scenname, indtypes=['median'], cellsize=(25e3, 25e3), bp=(100, 2000),
-        spacing=None, water_cutoffpct=25.0, bootstrap_se=False, N_bootstrap=100, 
+        spacing=None, water_cutoffpct=25.0, bootstrap_se=False, N_bootstrap=100,
         pathind=path_indices, noslope=False, overwrite=False, n_jobs=-1, **kwargs):
     from asymter import gridtiles, create_grid, corner0, spacingdef, corner1, EPSGdef
     if spacing is None:
@@ -329,6 +328,3 @@ def batch_asymter(
     for indtype in indtypes_:  # add se
         _write_geotiff(pathout, scenname, grid, asyminds, geotrans, proj, indtype=indtype)
 
-
-    
-    
