@@ -380,10 +380,10 @@ def plot_kd_regions(fnout):
         ax.text(
             0.04, 0.90, ascii_lowercase[jax] + ')', ha='left', va='baseline', color=col,
             transform=ax.transAxes, bbox=bbox)
-#     fig.savefig(os.path.join(path_figures, fnout))
-    plt.show()
+    fig.savefig(os.path.join(path_figures, fnout))
+#     plt.show()
 
 if __name__ == '__main__':
 #     plot_kd(fnout='kde.pdf')
 #     plot_kd_soil(fnout='kdesoil.pdf')
-    plot_kd_regions(None)
+    plot_kd_regions(fnout='kderegions.pdf')
