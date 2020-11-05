@@ -14,7 +14,7 @@ from asymter import (
 
 indices_bootstrap = ['median', 'logratio', 'roughness', 'medianEW', 'logratioEW']
 seed = 1
-N = (5, 5)
+
 
 def zero_pad(arr, pct=25):
     shapeout = (np.array(arr.shape) * (1 + pct / 100))
@@ -66,25 +66,32 @@ def bandpass(dem, geotrans, bp=(None, None), zppct=25.0, freqdomain=False):
         dem_ = dem_[0:dem.shape[0], 0:dem.shape[1]].copy()
         return dem_
 
+def _aggressive_interpolation(dem, N = (5, 5)):
+    from skimage.transform import resize
+    import warnings
+    dds = np.zeros(N)
+    b = (np.array(dem.shape)/N).astype(np.int16)
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        for j0 in range(N[0]):
+            for j1 in range(N[1]):
+                dds[j0, j1] = np.nanmedian(dem[j0*b[0]:(j0+1)*b[0], j1*b[1]:(j1+1)*b[1]])
+    dds[np.isnan(dds)] = np.nanmedian(dem)
+    demfs = resize(dds, dem.shape)
+    return demfs
+
 def inpaint_mask(
         dem, geotrans, bp=(100, 1000), adem_definvalid=adem_definvalid, mf_factor=4):
     # to do: use opencv inpainting; reasonable length scales
     import warnings
     from scipy.ndimage import median_filter, binary_dilation, generate_binary_structure
-    from skimage.transform import resize
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category=RuntimeWarning)
         dem[dem <= adem_definvalid] = np.nan
     demf = median_filter(dem, size=mf_factor * int(np.abs(bp[0] / geotrans[1])))#2
     dem[np.isnan(dem)] = demf[np.isnan(dem)]
     mask0 = np.isnan(dem)
-    dds = np.zeros(N)
-    b = (np.array(dem.shape)/N).astype(np.int16)
-    for j0 in range(N[0]):
-        for j1 in range(N[1]):
-            dds[j0, j1] = np.nanmedian(dem[j0*b[0]:(j0+1)*b[0], j1*b[1]:(j1+1)*b[1]])
-    dds[np.isnan(dds)] = np.nanmedian(dem)
-    demfs = resize(dds, dem.shape)
+    demfs = _aggressive_interpolation(dem)
     dem[mask0] = demfs[mask0]
     l_int = 2 * bp[1] if bp[1] is not None else 3 * bp[0] #2
     selem = generate_binary_structure(2, 1)
