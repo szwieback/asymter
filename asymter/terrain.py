@@ -302,7 +302,6 @@ def _write_geotiff(pathout, scenname, grid, asyminds, geotrans, proj, indtype='m
             if len(ptind) >= 1:
                 asymindarr[ptind[1], ptind[0]] = asyminddict['asymind'][indtype][jpt]
     fnout = os.path.join(pathout, f'{scenname}_{indtype}.tif')
-    print(fnout)
     save_geotiff(asymindarr, fnout, geotransform=geotrans, proj=proj)
 
 def batch_asymter(
@@ -332,13 +331,11 @@ def batch_asymter(
     if n_jobs == 1:
         asyminds = []
         for tilestruc in gt:
-            if tilestruc.tile == (53, 17):
-                asyminds.append(_process(tilestruc))
+            asyminds.append(_process(tilestruc))
     else:
         from joblib import Parallel, delayed
         asyminds = Parallel(n_jobs=n_jobs)(delayed(_process)(tilestruc) for tilestruc in gt)
 
-    print('writing out geotiffs')
     indtypes_ = indtypes
     if bootstrap_se:
         indtypes_ = indtypes_ + [f'{it}_se' for it in indtypes if it in indices_bootstrap]
