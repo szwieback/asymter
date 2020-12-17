@@ -31,7 +31,7 @@ ccrs3413 = ccrs.Stereographic(
 ocean_hr = cfeature.NaturalEarthFeature('physical', 'ocean', '50m')
 lakes_hr = cfeature.NaturalEarthFeature('physical', 'lakes', '50m')
 
-def gamma(val, exponent=0.50):
+def gamma(val, exponent=0.68):#0.50
     return np.sign(val) * np.abs(val) ** exponent
 
 # horrible hack to rotate image while avoiding explicit coordinate conversion
@@ -176,9 +176,76 @@ def wind_precip_plot(fnout=None):
     if fnout is not None:
         fig.savefig(fnout, dpi=450)
 
+def maps_processing(index0 = 'logratio', maxse=0.02, plot_baseline=True, fnout=None):
+    scenname = 'bandpass'
+    def _read_scenname(scenname, index=index0):
+        fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
+        im, proj, geotrans = read_gdal(fnindex)
+        return im, proj, geotrans
+    im, proj, geotrans = _read_scenname(scenname)
+    fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index0}_se.tif')
+    selimit = (fnindexse, maxse)
+    mask = read_mask(selimit=selimit, erosion_iterations=None)
+    im[np.logical_not(mask)] = np.nan
+
+    extent = hack_extent(geotrans, im)
+
+    fig, axs = prepare_figure(
+        nrows=2, ncols=2, figsize=(1.7, 1.7), subplot_kw={'projection': ccrsproj},
+        remove_spines=False, hspace=0.37, wspace=0.20, left=0.020, bottom=0.095,
+        right=0.980, top=0.990)
+
+    circle = _circle_extent()
+
+    cmap = copy.copy(cc.cm['bwy'])
+    cmap.set_bad('#d0d0d0', 1.)
+    ticks = [-0.4, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.4]
+    ticklabels = ['-0.4', '', '-0.2', '-0.1', '0.0', '0.1', '0.2', '', '0.4']
+    vmax = ticks[-1]
+
+    im, _, _ = _read_scenname('lowpass')
+    _draw_panel(
+        gamma(im), fig, axs[0, 1], circle, ccrsproj, cmap=cmap, vmax=gamma(vmax),
+        label='lowpass $a$ [-]', extent=extent, ticks=gamma(ticks),
+        ticklabels=ticklabels)
+
+    im, _, _ = _read_scenname('bandpass002')
+    _draw_panel(
+        gamma(im), fig, axs[1, 0], circle, ccrsproj, cmap=cmap, vmax=gamma(vmax),
+        label='low threshold $a$ [-]', extent=extent, ticks=gamma(ticks),
+        ticklabels=ticklabels)
+
+    im, _, _ = _read_scenname('bandpass008')
+    _draw_panel(
+        gamma(im), fig, axs[1, 1], circle, ccrsproj, cmap=cmap, vmax=gamma(vmax),
+        label='high threshold $a$ [-]', extent=extent, ticks=gamma(ticks),
+        ticklabels=ticklabels)
+
+    if plot_baseline:
+        _draw_panel(
+            gamma(im), fig, axs[0, 0], circle, ccrsproj, cmap=cmap, vmax=gamma(vmax),
+            label= 'baseline $a$ [-]', extent=extent, ticks=gamma(ticks), 
+            ticklabels=ticklabels)
+    else:
+        ticks = [-15, -10, -5, 0, 5, 10, 15]
+        ticklabels = ticks
+        vmax = ticks[-1]
+        im, _, _ = _read_scenname('bandpass', index='median')
+        im[np.logical_not(mask)] = np.nan
+        _draw_panel(
+            im, fig, axs[0, 0], circle, ccrsproj, cmap=cmap, vmax=vmax,
+            label='bandpass $a_m$ [-]', extent=extent, ticks=ticks,
+            ticklabels=ticklabels)
+
+    if fnout is not None:
+        fig.savefig(fnout, dpi=450)
+
 if __name__ == '__main__':
     # add: a, b, c, d
     # run with more slope options
-#     maps(fnout=os.path.join(path_figures, 'maps.pdf'))
+    maps(fnout=os.path.join(path_figures, 'maps.pdf'))
 #     wind_precip_plot(fnout=os.path.join(path_figures, 'mapwindprecip.pdf'))
-    pass
+    maps_processing(
+        fnout=os.path.join(path_figures, 'maps_processing.pdf'), plot_baseline=False)
+    maps_processing(
+        fnout=os.path.join(path_figures, 'maps_processing_EW.pdf'), index0='logratioEW')
