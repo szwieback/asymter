@@ -325,7 +325,6 @@ def batch_asymter(
                 N_bootstrap=N_bootstrap, noslope=noslope, overwrite=overwrite, **kwargs)
         except:
             print(f'Error in {tilestruc.tile}')
-            raise
             res = None
         return res
     if n_jobs == 1:
