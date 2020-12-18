@@ -179,10 +179,32 @@ def _ruggedness(dem):
         ruggedness = np.nan
     return ruggedness
 
-def asymindex(topo, indtype='median', bootstrap_se=False, N_bootstrap=100, **kwargs):
-    # topo: (2, N) [slope: NS, EW], or (1, N) [just DEM] if noslope; no NaN
+def block_bootstrap(topo, N_bootstrap=100, bs=(30, 30), rng=None):
+    from itertools import product
+    if rng is None:
+        rng = np.random.RandomState(seed=1)
+    # forms blocks over axes 1+
+    N = np.floor(np.array(topo.shape)[1:] / np.array(bs)).astype(np.int64)
+    N_tot = np.product(N)
+    # discards a tiny fraction if topo shape not divisible by bs
+    topoblock = np.zeros((topo.shape[0], *bs, N_tot))
+    # loop: b is a tuple of block indices
+    for jb, b in enumerate(product(*[range(x) for x in N])):
+        s = [slice(None)] + [slice(b_ * bs_, (b_ + 1) * bs_) for b_, bs_ in zip(b, bs)]
+        topoblock[..., jb] = topo[s]
+    for _ in range(N_bootstrap):
+        block_sample = rng.choice(range(N_tot), size=N_tot)
+        topo_sample = np.concatenate(
+            [topoblock[..., b].reshape(topo.shape[0], -1) for b in block_sample], axis=-1)
+        # remove nan
+        yield topo_sample[:, np.all(np.isfinite(topo_sample), axis=0)]
+
+def asymindex(topow, indtype='median', bootstrap_se=False, N_bootstrap=100, **kwargs):
+    # topow: (2, ...) [slope: NS, EW], or (1, ...) [just DEM] if noslope
+    # EW same sign convention as NS
     if not bootstrap_se:
-        # EW same sign convention as NS
+        topo = np.reshape(topow, (topow.shape[0], -1))
+        topo = topo[:, np.all(np.isfinite(topo), axis=0)]
         if indtype in ('median', 'medianEW'):
             asymi = _median_asymindex(topo, indtype=indtype)
         elif indtype in ('logratio', 'logratioEW'):
@@ -201,8 +223,8 @@ def asymindex(topo, indtype='median', bootstrap_se=False, N_bootstrap=100, **kwa
         import warnings
         rng = np.random.default_rng(seed=seed)
         asymi_bs = []
-        for _ in range(N_bootstrap):
-            topo_bs = rng.choice(topo, size=topo.shape[1], axis=1)
+        for topo_bs in block_bootstrap(topo, N_bootstrap=N_bootstrap):
+#             topo_bs = rng.choice(topoblock, size=topoblock.shape[1], axis=1)
             asymi_bs.append(asymindex(topo_bs, indtype=indtype, **kwargs))
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', category=RuntimeWarning)
@@ -218,8 +240,6 @@ def asymindex_pts(
         cwindow = (pt[0], pt[1], cellsize[0], cellsize[1])
         if topo is not None:
             topow = gdal_cclip(topo, geotrans, cwindow)
-            topow = np.reshape(topow, (topow.shape[0], -1))
-            topow = topow[:, np.all(np.isfinite(topow), axis=0)]
         for indtype in indtypes:
             if valid:
                 asym[indtype].append(
