@@ -191,7 +191,7 @@ def block_bootstrap(topo, N_bootstrap=100, bs=(30, 30), rng=None):
     # loop: b is a tuple of block indices
     for jb, b in enumerate(product(*[range(x) for x in N])):
         s = [slice(None)] + [slice(b_ * bs_, (b_ + 1) * bs_) for b_, bs_ in zip(b, bs)]
-        topoblock[..., jb] = topo[s]
+        topoblock[..., jb] = topo[tuple(s)]
     for _ in range(N_bootstrap):
         block_sample = rng.choice(range(N_tot), size=N_tot)
         topo_sample = np.concatenate(
@@ -223,7 +223,7 @@ def asymindex(topow, indtype='median', bootstrap_se=False, N_bootstrap=100, **kw
         import warnings
         rng = np.random.default_rng(seed=seed)
         asymi_bs = []
-        for topo_bs in block_bootstrap(topo, N_bootstrap=N_bootstrap):
+        for topo_bs in block_bootstrap(topow, N_bootstrap=N_bootstrap, rng=rng):
 #             topo_bs = rng.choice(topoblock, size=topoblock.shape[1], axis=1)
             asymi_bs.append(asymindex(topo_bs, indtype=indtype, **kwargs))
         with warnings.catch_warnings():
@@ -344,7 +344,8 @@ def batch_asymter(
                 water_cutoffpct=water_cutoffpct, bootstrap_se=bootstrap_se,
                 N_bootstrap=N_bootstrap, noslope=noslope, overwrite=overwrite, **kwargs)
         except:
-            print(f'Error in {tilestruc.tile}')
+            print(f'error in {tilestruc.tile}')
+            raise
             res = None
         return res
     if n_jobs == 1:
