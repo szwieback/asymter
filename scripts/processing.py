@@ -19,11 +19,11 @@ if __name__ == '__main__':
 #     batch_asymter(
 #         'lowpass', indtypes=indtypes, bp=(bp[0], None), cellsize=cellsize, 
 #         bootstrap_se=True)
-#     batch_asymter(
-#         'raw', indtypes=indtypes_dem, cellsize=cellsize, bp=bp, bootstrap_se=False, 
-#         noslope=True)
-#     batch_asymter('bandpass002', indtypes=indtypes, cellsize=cellsize, bp=bp,
-#         bootstrap_se=True, minslope=0.02)
-#     batch_asymter('bandpass008', indtypes=indtypes, cellsize=cellsize, bp=bp,
-#         bootstrap_se=True, minslope=0.08)
+    batch_asymter(
+        'raw', indtypes=indtypes_dem, cellsize=cellsize, bp=bp, bootstrap_se=False, 
+        noslope=True)
+    batch_asymter('bandpass002', indtypes=indtypes, cellsize=cellsize, bp=bp,
+        bootstrap_se=True, minslope=0.02)
+    batch_asymter('bandpass008', indtypes=indtypes, cellsize=cellsize, bp=bp,
+        bootstrap_se=True, minslope=0.08)
 
