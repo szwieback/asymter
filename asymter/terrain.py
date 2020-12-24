@@ -269,7 +269,8 @@ def asymter_tile(
     topo = None
     valid = False
     geotrans = None
-    if adem_tile_available(tile=tile, path=path_adem, res=res, version=version) and len(pts) > 0:
+    if (adem_tile_available(tile=tile, path=path_adem, res=res, version=version)
+        and len(pts) > 0):
         dem, proj, geotrans, _ = read_adem_tile_buffer(
             tile=tile, buffer=buffer_read, path=path_adem, version=adem_defversion,
             res=adem_defres)
@@ -345,7 +346,7 @@ def batch_asymter(
                 N_bootstrap=N_bootstrap, noslope=noslope, overwrite=overwrite, **kwargs)
         except:
             print(f'error in {tilestruc.tile}')
-            raise
+#             raise
             res = None
         return res
     if n_jobs == 1:

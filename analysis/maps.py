@@ -31,7 +31,7 @@ ccrs3413 = ccrs.Stereographic(
 ocean_hr = cfeature.NaturalEarthFeature('physical', 'ocean', '50m')
 lakes_hr = cfeature.NaturalEarthFeature('physical', 'lakes', '50m')
 
-def gamma(val, exponent=0.68):#0.50
+def gamma(val, exponent=0.80):#0.68
     return np.sign(val) * np.abs(val) ** exponent
 
 # horrible hack to rotate image while avoiding explicit coordinate conversion
