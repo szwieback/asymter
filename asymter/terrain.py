@@ -179,7 +179,7 @@ def _ruggedness(dem):
         ruggedness = np.nan
     return ruggedness
 
-def block_bootstrap(topo, N_bootstrap=100, bs=(30, 30), rng=None):
+def block_bootstrap(topo, N_bootstrap=100, bs=(10, 10), rng=None):
     from itertools import product
     if rng is None:
         rng = np.random.RandomState(seed=1)

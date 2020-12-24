@@ -82,7 +82,7 @@ def _circle_extent():
     circle = mpath.Path(verts * radius + center)
     return circle
 
-def maps(scenname='bandpass', index='logratio', maxse=0.02, fnout=None):
+def maps(scenname='bandpass', index='logratio', maxse=0.06, fnout=None):
     fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
     im, proj, geotrans = read_gdal(fnindex)
     fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
