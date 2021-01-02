@@ -9,6 +9,8 @@ import numpy as np
 from asymter import path_indices, read_gdal
 from paths import fnexplandict, path_explanatory
 
+maxse = 0.06
+gridsize = 513
 logsdict = {'ruggedness': True, 'asym': False, 'temp': False, 'prec': True, 'soil': True}
 
 def read_longitude(fnexplandict):
@@ -191,8 +193,6 @@ def plot_kd(fnout, scenname='bandpass'):
         'vmax': (0.07, 0.30), 'vmin': (-0.07, 0.00), 'ylim': (-17, 3),
         'yticks': (-15, -10, -5, 0), 'cticks': ([-0.05, 0.0, 0.05], [0.0, 0.1, 0.2, 0.3])}
     index = 'logratio'
-    maxse = 0.02
-    gridsize = 129  # 513
     cutoff = 0.02  # 0.02
     fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
     fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
@@ -262,8 +262,6 @@ def plot_kd_soil(fnout, scenname='bandpass'):
         'vmax': (0.07, 0.3), 'vmin': (-0.07, 0.00), 'ylim': (-17, 3),
         'yticks': (-15, -10, -5, 0), 'cticks': ([-0.05, 0.0, 0.05], [0.0, 0.1, 0.2, 0.3])}
     index = 'logratio'
-    maxse = 0.02
-    gridsize = 129
     cutoff = 0.02
     fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
     fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
@@ -322,8 +320,6 @@ def plot_kd_regions(fnout):
         'yticks': (-15, -10, -5, 0), 'cticks': ([-0.05, 0.0, 0.05], [0.0, 0.1, 0.2, 0.3])}
     scenname = 'bandpass'
     index = 'logratio'
-    maxse = 0.02
-    gridsize = 129  # 513
     cutoff = 0.02  # 0.02
     fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
     fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
@@ -390,8 +386,6 @@ def plot_kd_small(fnout, scenname='bandpass'):
         'vmax': (0.07, 0.30), 'vmin': (-0.07, 0.00), 'ylim': (-17, 3),
         'yticks': (-15, -10, -5, 0), 'cticks': ([-0.05, 0.0, 0.05], [0.0, 0.1, 0.2, 0.3])}
     index = 'logratio'
-    maxse = 0.02
-    gridsize = 513  # 513
     cutoff = 0.02
     xlabelpos = -0.30
     fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
@@ -471,8 +465,6 @@ def plot_kd_temperature(fnout, scenname='bandpass'):
     import colorcet as cc
     from plotting import prepare_figure, path_figures
     index = 'logratio'
-    maxse = 0.02
-    gridsize = 1025  # 513
     cutoff = 0.05
     fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
     fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
@@ -511,9 +503,8 @@ if __name__ == '__main__':
 #     plot_kd(fnout='kde.pdf')
 #     plot_kd_soil(fnout='kdesoil.pdf')
 #     plot_kd_regions(fnout='kderegions.pdf')
-#     plot_kd_small(fnout='kdesmall.pdf')
+    plot_kd_small(fnout='kdesmall.pdf')
 #     for scenname in ['lowpass', 'bandpass002', 'bandpass008']:
 #         plot_kd_soil(fnout=f'kdesoil_{scenname}.pdf', scenname=scenname)
 #         plot_kd(fnout=f'kde_{scenname}.pdf', scenname=scenname)
     plot_kd_temperature('kdetemp.pdf')
-    # return to 300-800

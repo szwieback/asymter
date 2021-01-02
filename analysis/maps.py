@@ -111,11 +111,12 @@ def maps(scenname='bandpass', index='logratio', maxse=0.06, fnout=None):
     imse[np.logical_not(mask)] = np.nan
     cmap = copy.copy(cc.cm['CET_CBL1'])
     cmap.set_bad('#d0d0d0', 1.)
-    ticks = [0.0, 0.003, 0.01, 0.02]
+    ticks = [0.0, 0.04, 0.08]
+    gamma_ = lambda x: x
     _draw_panel(
-        gamma(imse), fig, axs[1, 0], circle, ccrsproj, cmap=cmap, vmin=gamma(0.0),
-        vmax=gamma(0.02), label='asymmetry standard error [-]', extent=extent,
-        ticks=gamma(ticks), ticklabels=ticks)
+        gamma(imse), fig, axs[1, 0], circle, ccrsproj, cmap=cmap, vmin=gamma_(0.0),
+        vmax=gamma_(0.08), label='asymmetry standard error [-]', extent=extent,
+        ticks=gamma_(ticks), ticklabels=ticks)
 
     imT, _, _ = read_gdal(fnexplandict['temp'])
     cmap = copy.copy(cc.cm['CET_CBL1'])
@@ -245,7 +246,7 @@ if __name__ == '__main__':
     # run with more slope options
     maps(fnout=os.path.join(path_figures, 'maps.pdf'))
 #     wind_precip_plot(fnout=os.path.join(path_figures, 'mapwindprecip.pdf'))
-    maps_processing(
-        fnout=os.path.join(path_figures, 'maps_processing.pdf'), plot_baseline=False)
-    maps_processing(
-        fnout=os.path.join(path_figures, 'maps_processing_EW.pdf'), index0='logratioEW')
+#     maps_processing(
+#         fnout=os.path.join(path_figures, 'maps_processing.pdf'), plot_baseline=False)
+#     maps_processing(
+#         fnout=os.path.join(path_figures, 'maps_processing_EW.pdf'), index0='logratioEW')

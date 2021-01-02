@@ -12,7 +12,7 @@ from asymter import (
     proj_from_epsg, path_adem, path_indices, match_watermask, read_adem_tile_buffer,
     adem_tile_available, adem_defversion, adem_definvalid, adem_defres, adem_tilestr)
 
-indices_bootstrap = ['median', 'logratio', 'roughness', 'medianEW', 'logratioEW']
+indices_bootstrap_def = ['median', 'logratio', 'roughness', 'medianEW', 'logratioEW']
 seed = 1
 
 
@@ -233,9 +233,10 @@ def asymindex(topow, indtype='median', bootstrap_se=False, N_bootstrap=100, **kw
 
 def asymindex_pts(
         topo, pts, geotrans, cellsize=(25e3, 25e3), indtypes=['median'],
-        bootstrap_se=False, N_bootstrap=100, valid=True, **kwargs):
+        bootstrap_se=False, indices_bootstrap=None, N_bootstrap=100, valid=True, **kwargs):
     from collections import defaultdict
     asym = defaultdict(lambda: [])
+    if indices_bootstrap is None: indices_bootstrap = indices_bootstrap_def
     for pt in pts:
         cwindow = (pt[0], pt[1], cellsize[0], cellsize[1])
         if topo is not None:
@@ -258,8 +259,8 @@ def asymindex_pts(
 def asymter_tile(
         pts, cellsize=(25e3, 25e3), tile=(53, 17), bp=(100, 2000), buffer_water=None,
         buffer_read=None, indtypes=['median'], water_cutoffpct=5.0, bootstrap_se=False,
-        N_bootstrap=100, noslope=False, path_adem=path_adem, res=adem_defres,
-        version=adem_defversion, **kwargs):
+        indices_bootstrap=None, N_bootstrap=100, noslope=False, path_adem=path_adem, 
+        res=adem_defres, version=adem_defversion, **kwargs):
     if buffer_water is None:
         buffer_water = 2 * bp[0]
     if buffer_read is None:
@@ -293,13 +294,14 @@ def asymter_tile(
             valid = False
     asym = asymindex_pts(
         topo, pts, geotrans, cellsize=cellsize, indtypes=indtypes,
-        bootstrap_se=bootstrap_se, N_bootstrap=N_bootstrap, valid=valid, **kwargs)
+        bootstrap_se=bootstrap_se, indices_bootstrap=indices_bootstrap, 
+        N_bootstrap=N_bootstrap, valid=valid, **kwargs)
     return asym
 
 def _batch_asymter(
         tilestruc, pathout, cellsize=(25e3, 25e3), bp=(100, 2000),
-        indtypes=['median'], water_cutoffpct=5.0, bootstrap_se=False, N_bootstrap=100,
-        noslope=False, overwrite=False, **kwargs):
+        indtypes=['median'], water_cutoffpct=5.0, bootstrap_se=False, 
+        indices_bootstrap=None, N_bootstrap=100, noslope=False, overwrite=False, **kwargs):
     tile = tilestruc.tile
     fnout = os.path.join(pathout, f'{adem_tilestr(tile)}.p')
     if not os.path.exists(fnout): print(fnout)
@@ -308,7 +310,8 @@ def _batch_asymter(
         asymind_tile = asymter_tile(
             ptslist, cellsize=cellsize, tile=tile, bp=bp, indtypes=indtypes,
             water_cutoffpct=water_cutoffpct, bootstrap_se=bootstrap_se,
-            N_bootstrap=N_bootstrap, noslope=noslope, **kwargs)
+            indices_bootstrap=indices_bootstrap, N_bootstrap=N_bootstrap, noslope=noslope, 
+            **kwargs)
         dictout = {'tile': tilestruc.tile, 'asymind': asymind_tile, 'pts': ptslist,
                    'ind': list(tilestruc.ind)}
         save_object(dictout, fnout)
@@ -327,11 +330,13 @@ def _write_geotiff(pathout, scenname, grid, asyminds, geotrans, proj, indtype='m
 
 def batch_asymter(
         scenname, indtypes=['median'], cellsize=(25e3, 25e3), bp=(100, 2000),
-        spacing=None, water_cutoffpct=25.0, bootstrap_se=False, N_bootstrap=100,
-        pathind=path_indices, noslope=False, overwrite=False, n_jobs=-1, **kwargs):
+        spacing=None, water_cutoffpct=25.0, bootstrap_se=False, indices_bootstrap=None, 
+        N_bootstrap=100, pathind=path_indices, noslope=False, overwrite=False, n_jobs=-1, 
+        **kwargs):
     from asymter import gridtiles, create_grid, corner0, spacingdef, corner1, EPSGdef
     if spacing is None:
         spacing = spacingdef
+    if indices_bootstrap is None: indices_bootstrap = indices_bootstrap_def
     grid = create_grid(spacing=spacing, corner0=corner0, corner1=corner1)
     geotrans = (corner0[0], spacing[0], 0.0, corner0[1], 0.0, spacing[1])
     proj = proj_from_epsg(EPSGdef)
@@ -343,7 +348,8 @@ def batch_asymter(
             res = _batch_asymter(
                 tilestruc, pathout, cellsize=cellsize, bp=bp, indtypes=indtypes,
                 water_cutoffpct=water_cutoffpct, bootstrap_se=bootstrap_se,
-                N_bootstrap=N_bootstrap, noslope=noslope, overwrite=overwrite, **kwargs)
+                indices_bootstrap=indices_bootstrap, N_bootstrap=N_bootstrap, 
+                noslope=noslope, overwrite=overwrite, **kwargs)
         except:
             print(f'error in {tilestruc.tile}')
 #             raise
