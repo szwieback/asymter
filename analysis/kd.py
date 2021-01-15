@@ -11,7 +11,9 @@ from paths import fnexplandict, path_explanatory
 
 maxse = 0.06
 gridsize = 513
+gamma = 0.05
 logsdict = {'ruggedness': True, 'asym': False, 'temp': False, 'prec': True, 'soil': True}
+
 
 def read_longitude(fnexplandict):
     from asymter import geospatial_from_file
@@ -104,7 +106,7 @@ def conditional_quantile(pdf, grid, quantile=0.5, cutoff=0.01):
         cond_quants[Z < cutoff * np.max(Z)] = np.nan
     return cond_quants
 
-def conditional_ipr(pdf, grid, cutoff=0.01, gamma=0.1):
+def conditional_iqr(pdf, grid, cutoff=0.01, gamma=gamma):
     q1 = conditional_quantile(pdf, grid, quantile=gamma, cutoff=cutoff)
     q3 = conditional_quantile(pdf, grid, quantile=1 - gamma, cutoff=cutoff)
     return q3 - q1
@@ -131,7 +133,7 @@ def plot_median_ruggedness_temp(pdf, grid, cutoff=0.05):
     cmap = cc.cm['bwy']
     vmax = 0.07
     medianasym = conditional_quantile(pdf, grid, cutoff=cutoff)
-    # iqrasym = conditional_ipr(pdf, grid, cutoff=cutoff)
+    # iqrasym = conditional_iqr(pdf, grid, cutoff=cutoff)
     fig, ax = plt.subplots()
     ax.set_facecolor('#dddddd')
     ax.pcolormesh(
@@ -159,7 +161,7 @@ def _plot_kd_column(
         fnindex, fnexplandict, explannames=explannames, selimit=selimit, restrict=restrict,
         gridsize=gridsize)
     metrics = (conditional_quantile(pdf, grid, cutoff=cutoff),
-               conditional_ipr(pdf, grid, cutoff=cutoff))
+               conditional_iqr(pdf, grid, cutoff=cutoff))
     for jp, (ax, metric) in enumerate(zip(axs, metrics)):
         ax.set_facecolor(plotdict['bgcol'][jp])
         mp = ax.pcolormesh(
@@ -432,7 +434,7 @@ def plot_kd_small(fnout, scenname='bandpass'):
         axs[:, -1], fnindex, fnexplandict, {**pd, **pd_}, explannames=('temp', 'prec'),
         selimit=selimit, gridsize=gridsize, cutoff=cutoff,
         restrict=[('ruggedness', 250, 750)], label='rugged terrain')
-
+ 
     for ax in axs[:, 0]:
         ax.text(
             -0.67, 0.50, 'temperature $T$ [$^{\\circ}\\mathrm{C}$]',
@@ -468,7 +470,7 @@ def plot_kd_temperature(fnout, scenname='bandpass'):
     cutoff = 0.05
     fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
     fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
-    restrict = [('ruggedness', 250, 750)] 
+    restrict = [('ruggedness', 250, 750)]
     selimit = (fnindexse, maxse)
     pdf, grid = joint_pdf(
         fnindex, fnexplandict, explannames=('temp',), selimit=selimit, restrict=restrict,
@@ -477,7 +479,7 @@ def plot_kd_temperature(fnout, scenname='bandpass'):
     fig, ax = prepare_figure(
         nrows=1, ncols=1, figsize=(6.268, 1.100), figsizeunit='in',
         left=0.0684, right=0.9980, bottom=0.2800, top=0.9900, wspace=0.2, hspace=0.2,
-        remove_spines=False) # left=0.064, figsize=6.71
+        remove_spines=False)  # left=0.064, figsize=6.71
     ax.set_facecolor('#d0d0d0')
     Z = np.sum(pdf, axis=0)
     pdfc = pdf / Z[np.newaxis, :]
@@ -495,7 +497,7 @@ def plot_kd_temperature(fnout, scenname='bandpass'):
     ax.set_xticks([-15, -10, -5, 0])
     ax.text(-0.073, 0.500, '$a$ [-]', rotation=90, va='center', transform=ax.transAxes)
     ax.text(
-        0.48, -0.36, 'increasing temperature T [$^{\\circ}\\mathrm{C}$]', ha='center', 
+        0.48, -0.36, 'increasing temperature T [$^{\\circ}\\mathrm{C}$]', ha='center',
         va='baseline', transform=ax.transAxes)
     fig.savefig(os.path.join(path_figures, fnout))
 
@@ -503,8 +505,25 @@ if __name__ == '__main__':
 #     plot_kd(fnout='kde.pdf')
 #     plot_kd_soil(fnout='kdesoil.pdf')
 #     plot_kd_regions(fnout='kderegions.pdf')
-    plot_kd_small(fnout='kdesmall.pdf')
+#     plot_kd_small(fnout='kdesmall.pdf')
 #     for scenname in ['lowpass', 'bandpass002', 'bandpass008']:
 #         plot_kd_soil(fnout=f'kdesoil_{scenname}.pdf', scenname=scenname)
 #         plot_kd(fnout=f'kde_{scenname}.pdf', scenname=scenname)
     plot_kd_temperature('kdetemp.pdf')
+
+#     scenname, index = 'bandpass', 'logratio'
+#     fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
+#     fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
+#     selimit = (fnindexse, maxse)
+#     im, _, _ = read_gdal(fnindex)
+#     mask = read_mask(fnexplandict=fnexplandict, selimit=selimit)
+#     se, _, _ = read_gdal(selimit[0])
+#     mask[se > selimit[1]] = False
+#     valid = np.logical_and(np.isfinite(im), mask)
+#     a = im[valid].flatten()
+#     print(np.count_nonzero(np.abs(a) < 0.04) / len(a))
+#     print(np.count_nonzero(a > 0.04) / np.count_nonzero(np.abs(a) > 0.04))
+#     print(np.count_nonzero(a > 0.1) / np.count_nonzero(np.abs(a) > 0.1))
+#     print(np.count_nonzero(np.abs(a) > 0.2))
+#     print(np.nanpercentile(a, [5, 25, 50, 75, 95]))
+
