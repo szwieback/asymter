@@ -14,7 +14,7 @@ from asymter import (
 
 indices_bootstrap_def = ['median', 'logratio', 'roughness', 'medianEW', 'logratioEW']
 seed = 1
-
+minslope_def = 0.04
 
 def zero_pad(arr, pct=25):
     shapeout = (np.array(arr.shape) * (1 + pct / 100))
@@ -146,7 +146,7 @@ def _median_asymindex(slope, indtype='median'):
     return asymi
 
 def _logratio_asymindex(
-        slope, minslope=0.04, aspthresh=1.0, indtype='logratio', count=False):
+        slope, minslope=minslope_def, aspthresh=1.0, indtype='logratio', count=False):
     import warnings
     if indtype == 'logratioEW':
         slope_ = np.flip(slope, axis=0)
@@ -179,6 +179,23 @@ def _ruggedness(dem):
         ruggedness = np.nan
     return ruggedness
 
+def _absslope(slope, param='mean', minslope=minslope_def):
+    if slope.shape[1] > 0:
+        import warnings
+        slope_abs = np.sqrt(np.sum(slope ** 2, axis=0))
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=RuntimeWarning)
+            slope_abs = slope_abs[slope_abs >= minslope]
+            if param == 'mean':
+                absslope = np.nanmean(slope_abs)
+            elif param == 'median':
+                absslope = np.nanmedian(slope_abs)
+            else:
+                raise NotImplementedError
+    else:
+        absslope = np.nan
+    return absslope
+    
 def block_bootstrap(topo, N_bootstrap=100, bs=(10, 10), rng=None):
     from itertools import product
     if rng is None:
@@ -205,6 +222,7 @@ def asymindex(topow, indtype='median', bootstrap_se=False, N_bootstrap=100, **kw
     if not bootstrap_se:
         topo = np.reshape(topow, (topow.shape[0], -1))
         topo = topo[:, np.all(np.isfinite(topo), axis=0)]
+        parts = indtype.split('_')
         if indtype in ('median', 'medianEW'):
             asymi = _median_asymindex(topo, indtype=indtype)
         elif indtype in ('logratio', 'logratioEW'):
@@ -217,6 +235,8 @@ def asymindex(topow, indtype='median', bootstrap_se=False, N_bootstrap=100, **kw
             asymi = _roughness(topo)
         elif indtype == 'ruggedness':
             asymi = _ruggedness(topo)
+        elif parts[0] == 'absslope':
+            asymi = _absslope(topo, param=parts[1], **kwargs)
         else:
             raise NotImplementedError(f'{indtype} not known')
     else:
