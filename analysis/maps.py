@@ -244,9 +244,9 @@ def maps_processing(index0 = 'logratio', maxse=0.02, plot_baseline=True, fnout=N
 if __name__ == '__main__':
     # add: a, b, c, d
     # run with more slope options
-    maps(fnout=os.path.join(path_figures, 'maps.pdf'))
+#     maps(fnout=os.path.join(path_figures, 'maps.pdf'))
 #     wind_precip_plot(fnout=os.path.join(path_figures, 'mapwindprecip.pdf'))
-#     maps_processing(
-#         fnout=os.path.join(path_figures, 'maps_processing.pdf'), plot_baseline=False)
+    maps_processing(
+        fnout=os.path.join(path_figures, 'maps_processing.pdf'), plot_baseline=True)
 #     maps_processing(
 #         fnout=os.path.join(path_figures, 'maps_processing_EW.pdf'), index0='logratioEW')

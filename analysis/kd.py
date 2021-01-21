@@ -10,8 +10,8 @@ from asymter import path_indices, read_gdal
 from paths import fnexplandict, path_explanatory
 
 maxse = 0.06
-gridsize = 513
-gamma = 0.05
+gridsize = 33#513
+gamma = 0.1
 logsdict = {'ruggedness': True, 'asym': False, 'temp': False, 'prec': True, 'soil': True}
 
 
@@ -127,7 +127,7 @@ def joint_pdf(
     pdf = np.transpose(kde.pdf)
     return pdf, grid
 
-def plot_median_ruggedness_temp(pdf, grid, cutoff=0.05):
+def plot_median_relief_temp(pdf, grid, cutoff=0.05):
     import matplotlib.pyplot as plt
     import colorcet as cc
     cmap = cc.cm['bwy']
@@ -179,7 +179,7 @@ def _plot_kd_column(
         if 'xminorticks' in plotdict: ax.set_xticks(plotdict['xminorticks'], minor=True)
     if 'xlabel' in plotdict:
         axs[1].text(
-            0.5, plotdict['xlabelpos'], plotdict['xlabel'], transform=axs[1].transAxes,
+            0.5, -0.3, plotdict['xlabel'], transform=axs[1].transAxes,
             ha='center', va='baseline')
     if label is not None:
         axs[0].text(
@@ -205,7 +205,7 @@ def plot_kd(fnout, scenname='bandpass'):
         remove_spines=False)
     xticks = (30, 100, 1000)
     xmticks = (40, 50, 60, 70, 80, 90, 200, 300, 400, 500, 600, 700, 800, 900)
-    pd_ = {'xlim': (1.2, 3.0), 'xticks': np.log10(xticks), 'xlabel': 'ruggedness $r$ [m]',
+    pd_ = {'xlim': (1.2, 3.0), 'xticks': np.log10(xticks), 'xlabel': 'relief $r$ [m]',
            'xticklabels': xticks, 'xminorticks': np.log10(xmticks)}
     _plot_kd_column(
         axs[:, 0], fnindex, fnexplandict, {**pd, **pd_}, explannames=('temp', 'ruggedness'),
@@ -225,7 +225,7 @@ def plot_kd(fnout, scenname='bandpass'):
     mps = _plot_kd_column(
         axs[:, 3], fnindex, fnexplandict, {**pd, **pd_}, explannames=('temp', 'prec'),
         selimit=selimit, gridsize=gridsize, cutoff=cutoff,
-        restrict=[('ruggedness', 200, 800)], label='rugged terrain')
+        restrict=[('ruggedness', 200, 800)], label='moderate relief')
 
     for ax in axs[:, 0]:
         ax.text(
@@ -269,16 +269,16 @@ def plot_kd_soil(fnout, scenname='bandpass'):
     fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
     selimit = (fnindexse, maxse)
     fig, axs = prepare_figure(
-        nrows=2, ncols=2, figsize=(0.80, 0.92), sharex='col', sharey=True,
-        left=0.170, right=0.780, bottom=0.110, top=0.945, wspace=0.3, hspace=0.2,
+        nrows=2, ncols=2, figsize=(0.79, 0.82), sharex='col', sharey=True,
+        left=0.175, right=0.785, bottom=0.125, top=0.945, wspace=0.2, hspace=0.2,
         remove_spines=False)
     xticks = (30, 100, 1000)
     xmticks = (40, 50, 60, 70, 80, 90, 200, 300, 400, 500, 600, 700, 800, 900)
-    pd_ = {'xlim': (1.2, 3.0), 'xticks': np.log10(xticks), 'xlabel': 'ruggedness $r$ [m]',
+    pd_ = {'xlim': (1.2, 3.0), 'xticks': np.log10(xticks), 'xlabel': 'relief $r$ [m]',
            'xticklabels': xticks, 'xminorticks': np.log10(xmticks)}
     _plot_kd_column(
         axs[:, 0], fnindex, fnexplandict, {**pd, **pd_}, explannames=('temp', 'ruggedness'),
-        selimit=selimit, gridsize=gridsize, cutoff=cutoff, restrict=[('soil', 0.00, 1.0)],
+        selimit=selimit, gridsize=gridsize, cutoff=cutoff, restrict=[('soil', 0.00, 0.75)],
         label='thin soil')
     mps = _plot_kd_column(
         axs[:, 1], fnindex, fnexplandict, {**pd, **pd_}, explannames=('temp', 'ruggedness'),
@@ -304,7 +304,7 @@ def plot_kd_soil(fnout, scenname='bandpass'):
     bbox_ = {'facecolor': '#333333', 'edgecolor': 'none', 'boxstyle':'square,pad=0.12',
              'alpha': 0.9}
     for jax, ax in enumerate(axs.flatten(order='F')):
-        col = '#ffffff' if jax in (1,) else '#666666'
+        col = '#ffffff' if jax in (3,) else '#666666'
         bbox = None
         ax.text(
             0.04, 0.90, ascii_lowercase[jax] + ')', ha='left', va='baseline', color=col,
@@ -332,7 +332,7 @@ def plot_kd_regions(fnout):
         remove_spines=False)
     xticks = (30, 100, 1000)
     xmticks = (40, 50, 60, 70, 80, 90, 200, 300, 400, 500, 600, 700, 800, 900)
-    pd_ = {'xlim': (1.4, 3.0), 'xticks': np.log10(xticks), 'xlabel': 'ruggedness $r$ [m]',
+    pd_ = {'xlim': (1.4, 3.0), 'xticks': np.log10(xticks), 'xlabel': 'relief $r$ [m]',
            'xticklabels': xticks, 'xminorticks': np.log10(xmticks)}
     _plot_kd_column(
         axs[:, 0], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
@@ -399,7 +399,7 @@ def plot_kd_small(fnout, scenname='bandpass'):
         remove_spines=False)
     xticks = (30, 100, 1000)
     xmticks = (40, 50, 60, 70, 80, 90, 200, 300, 400, 500, 600, 700, 800, 900)
-    pd_ = {'xlim': (1.2, 3.0), 'xticks': np.log10(xticks), 'xlabel': 'ruggedness $r$ [m]',
+    pd_ = {'xlim': (1.2, 3.0), 'xticks': np.log10(xticks), 'xlabel': 'relief $r$ [m]',
            'xticklabels': xticks, 'xminorticks': np.log10(xmticks), 'xlabelpos': xlabelpos}
     _plot_kd_column(
         axs[:, 0], fnindex, fnexplandict, {**pd, **pd_}, explannames=('temp', 'ruggedness'),
@@ -501,29 +501,32 @@ def plot_kd_temperature(fnout, scenname='bandpass'):
         va='baseline', transform=ax.transAxes)
     fig.savefig(os.path.join(path_figures, fnout))
 
+def interrogate_results():
+    scenname, index = 'bandpass', 'logratio'
+    fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
+    fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
+    selimit = (fnindexse, maxse)
+    im, _, _ = read_gdal(fnindex)
+    mask = read_mask(fnexplandict=fnexplandict, selimit=selimit)
+    se, _, _ = read_gdal(selimit[0])
+    mask[se > selimit[1]] = False
+    valid = np.logical_and(np.isfinite(im), mask)
+    a = im[valid].flatten()
+    print(np.count_nonzero(np.abs(a) < 0.04) / len(a))
+    print(np.count_nonzero(a > 0.04) / np.count_nonzero(np.abs(a) > 0.04))
+    print(np.count_nonzero(a > 0.1) / np.count_nonzero(np.abs(a) > 0.1))
+    print(np.count_nonzero(np.abs(a) > 0.2))
+    print(np.nanpercentile(a, [5, 25, 50, 75, 95]))
+
 if __name__ == '__main__':
 #     plot_kd(fnout='kde.pdf')
-#     plot_kd_soil(fnout='kdesoil.pdf')
 #     plot_kd_regions(fnout='kderegions.pdf')
+    plot_kd_soil(fnout='kdesoil.pdf')
 #     plot_kd_small(fnout='kdesmall.pdf')
 #     for scenname in ['lowpass', 'bandpass002', 'bandpass008']:
 #         plot_kd_soil(fnout=f'kdesoil_{scenname}.pdf', scenname=scenname)
-#         plot_kd(fnout=f'kde_{scenname}.pdf', scenname=scenname)
-    plot_kd_temperature('kdetemp.pdf')
+#         plot_kd_small(fnout=f'kde_small_{scenname}.pdf', scenname=scenname)
+#     plot_kd_temperature('kdetemp.pdf')
 
-#     scenname, index = 'bandpass', 'logratio'
-#     fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
-#     fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
-#     selimit = (fnindexse, maxse)
-#     im, _, _ = read_gdal(fnindex)
-#     mask = read_mask(fnexplandict=fnexplandict, selimit=selimit)
-#     se, _, _ = read_gdal(selimit[0])
-#     mask[se > selimit[1]] = False
-#     valid = np.logical_and(np.isfinite(im), mask)
-#     a = im[valid].flatten()
-#     print(np.count_nonzero(np.abs(a) < 0.04) / len(a))
-#     print(np.count_nonzero(a > 0.04) / np.count_nonzero(np.abs(a) > 0.04))
-#     print(np.count_nonzero(a > 0.1) / np.count_nonzero(np.abs(a) > 0.1))
-#     print(np.count_nonzero(np.abs(a) > 0.2))
-#     print(np.nanpercentile(a, [5, 25, 50, 75, 95]))
+
 
