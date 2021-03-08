@@ -10,16 +10,15 @@ from asymter import path_indices, read_gdal
 from paths import fnexplandict, path_explanatory
 
 maxse = 0.06
-gridsize = 33#513
+gridsize = 513
 gamma = 0.1
-logsdict = {'ruggedness': True, 'asym': False, 'temp': False, 'prec': True, 'soil': True}
-
+logsdict = {
+    'ruggedness': True, 'asym': False, 'temp': False, 'prec': True, 'soil': True,
+    'absslope': True}
 
 def read_longitude(fnexplandict):
     from asymter import geospatial_from_file
     gs = geospatial_from_file(fnexplandict['ruggedness'])
-#     x = gs.geotrans[0] + np.arange(gs.shape[0]) * gs.geotrans[1]
-#     y = gs.geotrans[3] + np.arange(gs.shape[1]) * gs.geotrans[5]
     x = gs.geotrans[3] + np.arange(gs.shape[0]) * gs.geotrans[5]
     y = gs.geotrans[0] + np.arange(gs.shape[1]) * gs.geotrans[1]
     lon = np.arctan2(x[:, np.newaxis], y[np.newaxis, :]) * 180 / np.pi + 45
@@ -378,7 +377,7 @@ def plot_kd_regions(fnout):
     fig.savefig(os.path.join(path_figures, fnout))
 #     plt.show()
 
-def plot_kd_small(fnout, scenname='bandpass'):
+def plot_kd_small(fnout, scenname='bandpass', explan='ruggedness'):
     import matplotlib.pyplot as plt
     from plotting import prepare_figure, path_figures
     import colorcet as cc
@@ -397,33 +396,39 @@ def plot_kd_small(fnout, scenname='bandpass'):
         nrows=2, ncols=7, figsize=(1.98, 0.82), sharex='col', sharey=True,
         left=0.070, right=0.913, bottom=0.125, top=0.945, wspace=0.2, hspace=0.2,
         remove_spines=False)
-    xticks = (30, 100, 1000)
-    xmticks = (40, 50, 60, 70, 80, 90, 200, 300, 400, 500, 600, 700, 800, 900)
-    pd_ = {'xlim': (1.2, 3.0), 'xticks': np.log10(xticks), 'xlabel': 'relief $r$ [m]',
+    if explan == 'ruggedness':
+        xticks, xlim = (30, 100, 1000), (1.2, 3.0)
+        xmticks = (40, 50, 60, 70, 80, 90, 200, 300, 400, 500, 600, 700, 800, 900)
+        xlabel, xlabel_short = 'relief $r$ [m]', '$r$ [m]'
+    elif explan == 'absslope':
+        xticks, xlim = (0.1, 0.3), (np.log10(0.05), np.log10(0.32))
+        xmticks = (0.2, 0.4)
+        xlabel, xlabel_short = 'mean slope $s_m$ [-]', '$s_m$ [-]'
+    pd_ = {'xlim': xlim, 'xticks': np.log10(xticks), 'xlabel': xlabel,
            'xticklabels': xticks, 'xminorticks': np.log10(xmticks), 'xlabelpos': xlabelpos}
     _plot_kd_column(
-        axs[:, 0], fnindex, fnexplandict, {**pd, **pd_}, explannames=('temp', 'ruggedness'),
+        axs[:, 0], fnindex, fnexplandict, {**pd, **pd_}, explannames=('temp', explan),
         selimit=selimit, gridsize=gridsize, cutoff=cutoff, label='everywhere')
-    pd_['xlabel'] = '$r$ [m]'
+    pd_['xlabel'] = xlabel_short
     _plot_kd_column(
         axs[:, 2], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
-        explannames=('temp', 'ruggedness'), gridsize=gridsize, cutoff=cutoff,
+        explannames=('temp', explan), gridsize=gridsize, cutoff=cutoff,
         restrict=[('region', 1, 3)], label='America')
     _plot_kd_column(
         axs[:, 1], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
-        explannames=('temp', 'ruggedness'), gridsize=gridsize, cutoff=cutoff,
+        explannames=('temp', explan), gridsize=gridsize, cutoff=cutoff,
         restrict=[('region', 4, 6)], label='Asia')
     _plot_kd_column(
         axs[:, 3], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
-        explannames=('temp', 'ruggedness'), gridsize=gridsize, cutoff=cutoff,
+        explannames=('temp', explan), gridsize=gridsize, cutoff=cutoff,
         restrict=[('glacierras', 1, 1)], label='glaciated')
     _plot_kd_column(
         axs[:, 4], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
-        explannames=('temp', 'ruggedness'), gridsize=gridsize, cutoff=cutoff,
+        explannames=('temp', explan), gridsize=gridsize, cutoff=cutoff,
         restrict=[(('wind', 1), None, 0)], label='northerly wind')
     _plot_kd_column(
         axs[:, 5], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
-        explannames=('temp', 'ruggedness'), gridsize=gridsize, cutoff=cutoff,
+        explannames=('temp', explan), gridsize=gridsize, cutoff=cutoff,
         restrict=[(('wind', 1), 0, None)], label='southerly wind')
     xticks = (300, 1000)
     xmticks = (100, 200, 400, 500, 600, 700, 800, 900, 1100)
@@ -434,7 +439,7 @@ def plot_kd_small(fnout, scenname='bandpass'):
         axs[:, -1], fnindex, fnexplandict, {**pd, **pd_}, explannames=('temp', 'prec'),
         selimit=selimit, gridsize=gridsize, cutoff=cutoff,
         restrict=[('ruggedness', 250, 750)], label='rugged terrain')
- 
+
     for ax in axs[:, 0]:
         ax.text(
             -0.67, 0.50, 'temperature $T$ [$^{\\circ}\\mathrm{C}$]',
@@ -508,25 +513,33 @@ def interrogate_results():
     selimit = (fnindexse, maxse)
     im, _, _ = read_gdal(fnindex)
     mask = read_mask(fnexplandict=fnexplandict, selimit=selimit)
-    se, _, _ = read_gdal(selimit[0])
-    mask[se > selimit[1]] = False
     valid = np.logical_and(np.isfinite(im), mask)
     a = im[valid].flatten()
-    print(np.count_nonzero(np.abs(a) < 0.04) / len(a))
-    print(np.count_nonzero(a > 0.04) / np.count_nonzero(np.abs(a) > 0.04))
-    print(np.count_nonzero(a > 0.1) / np.count_nonzero(np.abs(a) > 0.1))
-    print(np.count_nonzero(np.abs(a) > 0.2))
-    print(np.nanpercentile(a, [5, 25, 50, 75, 95]))
+#     print(np.count_nonzero(np.abs(a) < 0.04) / len(a))
+#     print(np.count_nonzero(a > 0.04) / np.count_nonzero(np.abs(a) > 0.04))
+#     print(np.count_nonzero(a > 0.1) / np.count_nonzero(np.abs(a) > 0.1))
+#     print(np.count_nonzero(np.abs(a) > 0.2))
+#     print(np.nanpercentile(a, [5, 25, 50, 75, 95]))
+    for scenname2 in ['bandpass002', 'bandpass008', 'lowpass']:
+        im2, _, _ = read_gdal(os.path.join(
+            path_indices, scenname2, f'{scenname2}_{index}.tif'))
+        valid_all = np.logical_and(valid, np.isfinite(im2))
+        b, b2 = im[valid_all].flatten(), im2[valid_all].flatten()
+        print(scenname2)
+        print('R2: ', np.corrcoef(b, b2)[0, 1])
+        print('RMSE', np.mean((b - b2) ** 2) ** (1 / 2))
+        from scipy.stats import spearmanr
+        print('Spearman', spearmanr(b, b2)[0])
 
 if __name__ == '__main__':
 #     plot_kd(fnout='kde.pdf')
 #     plot_kd_regions(fnout='kderegions.pdf')
-    plot_kd_soil(fnout='kdesoil.pdf')
+#     plot_kd_soil(fnout='kdesoil.pdf')
 #     plot_kd_small(fnout='kdesmall.pdf')
+#     plot_kd_small(fnout='kdesmall_slope.pdf', explan='absslope')
 #     for scenname in ['lowpass', 'bandpass002', 'bandpass008']:
 #         plot_kd_soil(fnout=f'kdesoil_{scenname}.pdf', scenname=scenname)
 #         plot_kd_small(fnout=f'kde_small_{scenname}.pdf', scenname=scenname)
 #     plot_kd_temperature('kdetemp.pdf')
-
-
+    interrogate_results()
 

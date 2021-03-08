@@ -14,6 +14,7 @@ path_explanatory = {'soil': os.path.join(path_explanatory_, 'soil'),
                     'wind': os.path.join(path_explanatory_, 'wind')}
 fnexplandict = {
     'ruggedness': os.path.join(path_indices, 'raw', 'raw_ruggedness.tif'),
+    'absslope': os.path.join(path_indices, 'absslope', 'absslope_absslope_mean.tif'),
     'soil': os.path.join(path_explanatory['resampled'], 'soil.tif'),
     'prec': os.path.join(path_explanatory['resampled'], 'prec.tif'),
     'temp': os.path.join(path_explanatory['resampled'], 'temp10.tif'),
