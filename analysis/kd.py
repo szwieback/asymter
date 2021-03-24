@@ -10,11 +10,12 @@ from asymter import path_indices, read_gdal
 from paths import fnexplandict, path_explanatory
 
 maxse = 0.06
-gridsize = 513
+gridsize = 129  # 513
 gamma = 0.1
 logsdict = {
     'ruggedness': True, 'asym': False, 'temp': False, 'prec': True, 'soil': True,
     'absslope': True}
+modrrestrict = (200, 700)
 
 def read_longitude(fnexplandict):
     from asymter import geospatial_from_file
@@ -176,6 +177,10 @@ def _plot_kd_column(
         if 'xticks' in plotdict: ax.set_xticks(plotdict['xticks'])
         if 'xticklabels' in plotdict: ax.set_xticklabels(plotdict['xticklabels'])
         if 'xminorticks' in plotdict: ax.set_xticks(plotdict['xminorticks'], minor=True)
+        if 'vlines' in plotdict:
+            for v_ in plotdict['vlines']:
+                axs[0].axvline(v_, c='#666666', alpha=0.06, lw=0.30)
+
     if 'xlabel' in plotdict:
         axs[1].text(
             0.5, -0.3, plotdict['xlabel'], transform=axs[1].transAxes,
@@ -185,73 +190,6 @@ def _plot_kd_column(
             0.5, 1.04, label, ha='center', va='baseline', transform=axs[0].transAxes)
     return mps
 
-def plot_kd(fnout, scenname='bandpass'):
-    from plotting import prepare_figure, path_figures
-    import colorcet as cc
-    from string import ascii_lowercase
-    pd = {
-        'bgcol': ('#d0d0d0', '#d0d0d0'), 'cmap': (cc.cm['bwy'], cc.cm['CET_CBL1']),
-        'vmax': (0.07, 0.30), 'vmin': (-0.07, 0.00), 'ylim': (-17, 3),
-        'yticks': (-15, -10, -5, 0), 'cticks': ([-0.05, 0.0, 0.05], [0.0, 0.1, 0.2, 0.3])}
-    index = 'logratio'
-    cutoff = 0.02  # 0.02
-    fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
-    fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
-    selimit = (fnindexse, maxse)
-    fig, axs = prepare_figure(
-        nrows=2, ncols=4, figsize=(1.50, 0.92), sharex='col', sharey=True,
-        left=0.095, right=0.870, bottom=0.110, top=0.945, wspace=0.3, hspace=0.2,
-        remove_spines=False)
-    xticks = (30, 100, 1000)
-    xmticks = (40, 50, 60, 70, 80, 90, 200, 300, 400, 500, 600, 700, 800, 900)
-    pd_ = {'xlim': (1.2, 3.0), 'xticks': np.log10(xticks), 'xlabel': 'relief $r$ [m]',
-           'xticklabels': xticks, 'xminorticks': np.log10(xmticks)}
-    _plot_kd_column(
-        axs[:, 0], fnindex, fnexplandict, {**pd, **pd_}, explannames=('temp', 'ruggedness'),
-        selimit=selimit, gridsize=gridsize, cutoff=cutoff, label='everywhere')
-    _plot_kd_column(
-        axs[:, 1], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
-        explannames=('temp', 'ruggedness'), gridsize=gridsize, cutoff=cutoff,
-        restrict=[(('wind', 1), None, 0)], label='northerly wind')
-    _plot_kd_column(
-        axs[:, 2], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
-        explannames=('temp', 'ruggedness'), gridsize=gridsize, cutoff=cutoff,
-        restrict=[(('wind', 1), 0, None)], label='southerly wind')
-    xticks = (300, 1000)
-    xmticks = (100, 200, 400, 500, 600, 700, 800, 900, 1100)
-    pd_ = {'xlim': (2.0, 3.2), 'xticks': np.log10(xticks), 'xticklabels': xticks,
-           'xminorticks': np.log10(xmticks), 'xlabel': 'precipitation $P$ [mm]'}
-    mps = _plot_kd_column(
-        axs[:, 3], fnindex, fnexplandict, {**pd, **pd_}, explannames=('temp', 'prec'),
-        selimit=selimit, gridsize=gridsize, cutoff=cutoff,
-        restrict=[('ruggedness', 200, 800)], label='moderate relief')
-
-    for ax in axs[:, 0]:
-        ax.text(
-            -0.56, 0.5, 'temperature $T$ [$^{\\circ}\\mathrm{C}$]',
-            transform=ax.transAxes, ha='left', va='center', rotation=90)
-    cbpos = {'x': 0.10, 'dx': 0.02, 'dy': 0.24, 'labx': 0.5, 'laby':-4.0, 'y': 0.02}
-    clabels = ('\\textbf{median} [-]', '\\textbf{spread} [-]')
-    for jax, ax in enumerate(axs[:, -1]):
-        pos = ax.properties()['position']
-        _y = (0.5 * (pos.y0 + pos.y1) - 0.5 * cbpos['dy'] - cbpos['y'])
-        rect_cax = (pos.x1 + cbpos['x'], _y, cbpos['dx'], cbpos['dy'])
-        cax = fig.add_axes(rect_cax)
-        cbar = fig.colorbar(
-            mps[jax], cax=cax, orientation='vertical', ticklocation='left',
-            ticks=pd['cticks'][jax])
-        ax.text(
-            1.43, 0.90, clabels[jax], ha='center', va='baseline', transform=ax.transAxes,
-            color='#000000')
-    bbox_ = {'facecolor': '#333333', 'edgecolor': 'none', 'boxstyle':'square,pad=0.12',
-             'alpha': 0.9}
-    for jax, ax in enumerate(axs.flatten(order='F')):
-        col = '#ffffff' if jax in (1, 5) else '#666666'
-        bbox = bbox_ if jax < 0 else None
-        ax.text(
-            0.04, 0.90, ascii_lowercase[jax] + ')', ha='left', va='baseline', color=col,
-            transform=ax.transAxes, bbox=bbox)
-    fig.savefig(os.path.join(path_figures, fnout))
 
 def plot_kd_soil(fnout, scenname='bandpass'):
     import matplotlib.pyplot as plt
@@ -397,37 +335,39 @@ def plot_kd_small(fnout, scenname='bandpass', explan='ruggedness'):
         left=0.070, right=0.913, bottom=0.125, top=0.945, wspace=0.2, hspace=0.2,
         remove_spines=False)
     if explan == 'ruggedness':
-        xticks, xlim = (30, 100, 1000), (1.2, 3.0)
-        xmticks = (40, 50, 60, 70, 80, 90, 200, 300, 400, 500, 600, 700, 800, 900)
+        xticks, xlim = (100, 1000), (np.log10(40), np.log10(1000))#1.2, 3.0
+        xmticks = (40, 50, 60, 70, 80, 90, 200, 300, 400, 500, 600, 700, 800, 900, 1000)
         xlabel, xlabel_short = 'relief $r$ [m]', '$r$ [m]'
     elif explan == 'absslope':
         xticks, xlim = (0.1, 0.3), (np.log10(0.05), np.log10(0.32))
         xmticks = (0.2, 0.4)
         xlabel, xlabel_short = 'mean slope $s_m$ [-]', '$s_m$ [-]'
     pd_ = {'xlim': xlim, 'xticks': np.log10(xticks), 'xlabel': xlabel,
-           'xticklabels': xticks, 'xminorticks': np.log10(xmticks), 'xlabelpos': xlabelpos}
+           'xticklabels': xticks, 'xminorticks': np.log10(xmticks), 'xlabelpos': xlabelpos,
+           'vlines': np.log10(np.array(modrrestrict))}
     _plot_kd_column(
         axs[:, 0], fnindex, fnexplandict, {**pd, **pd_}, explannames=('temp', explan),
         selimit=selimit, gridsize=gridsize, cutoff=cutoff, label='everywhere')
+
     pd_['xlabel'] = xlabel_short
-    _plot_kd_column(
-        axs[:, 2], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
-        explannames=('temp', explan), gridsize=gridsize, cutoff=cutoff,
-        restrict=[('region', 1, 3)], label='America')
     _plot_kd_column(
         axs[:, 1], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
         explannames=('temp', explan), gridsize=gridsize, cutoff=cutoff,
         restrict=[('region', 4, 6)], label='Asia')
     _plot_kd_column(
-        axs[:, 3], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
+        axs[:, 2], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
+        explannames=('temp', explan), gridsize=gridsize, cutoff=cutoff,
+        restrict=[('region', 1, 3)], label='America')
+    _plot_kd_column(
+        axs[:, 5], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
         explannames=('temp', explan), gridsize=gridsize, cutoff=cutoff,
         restrict=[('glacierras', 1, 1)], label='glaciated')
     _plot_kd_column(
-        axs[:, 4], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
+        axs[:, 3], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
         explannames=('temp', explan), gridsize=gridsize, cutoff=cutoff,
         restrict=[(('wind', 1), None, 0)], label='northerly wind')
     _plot_kd_column(
-        axs[:, 5], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
+        axs[:, 4], fnindex, fnexplandict, {**pd, **pd_}, selimit=selimit,
         explannames=('temp', explan), gridsize=gridsize, cutoff=cutoff,
         restrict=[(('wind', 1), 0, None)], label='southerly wind')
     xticks = (300, 1000)
@@ -438,7 +378,7 @@ def plot_kd_small(fnout, scenname='bandpass', explan='ruggedness'):
     mps = _plot_kd_column(
         axs[:, -1], fnindex, fnexplandict, {**pd, **pd_}, explannames=('temp', 'prec'),
         selimit=selimit, gridsize=gridsize, cutoff=cutoff,
-        restrict=[('ruggedness', 250, 750)], label='rugged terrain')
+        restrict=[('ruggedness', *modrrestrict)], label='moderate relief')
 
     for ax in axs[:, 0]:
         ax.text(
@@ -460,7 +400,7 @@ def plot_kd_small(fnout, scenname='bandpass', explan='ruggedness'):
     bbox_ = {'facecolor': '#333333', 'edgecolor': 'none', 'boxstyle':'square,pad=0.12',
              'alpha': 0.9}
     for jax, ax in enumerate(axs.flatten(order='F')):
-        col = '#ffffff' if jax in (1, 3, 7, 9, 11) else '#666666'
+        col = '#ffffff' if jax in (1, 3, 5, 7, 9, 11) else '#666666'
         bbox = bbox_ if jax < 0 else None
         ax.text(
             0.04, 0.90, ascii_lowercase[jax] + ')', ha='left', va='baseline', color=col,
@@ -475,7 +415,7 @@ def plot_kd_temperature(fnout, scenname='bandpass'):
     cutoff = 0.05
     fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
     fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
-    restrict = [('ruggedness', 250, 750)]
+    restrict = [('ruggedness', *modrrestrict)]
     selimit = (fnindexse, maxse)
     pdf, grid = joint_pdf(
         fnindex, fnexplandict, explannames=('temp',), selimit=selimit, restrict=restrict,
@@ -535,11 +475,11 @@ if __name__ == '__main__':
 #     plot_kd(fnout='kde.pdf')
 #     plot_kd_regions(fnout='kderegions.pdf')
 #     plot_kd_soil(fnout='kdesoil.pdf')
-#     plot_kd_small(fnout='kdesmall.pdf')
+    plot_kd_small(fnout='kdesmall.pdf')
 #     plot_kd_small(fnout='kdesmall_slope.pdf', explan='absslope')
 #     for scenname in ['lowpass', 'bandpass002', 'bandpass008']:
 #         plot_kd_soil(fnout=f'kdesoil_{scenname}.pdf', scenname=scenname)
 #         plot_kd_small(fnout=f'kde_small_{scenname}.pdf', scenname=scenname)
 #     plot_kd_temperature('kdetemp.pdf')
-    interrogate_results()
+#     interrogate_results()
 

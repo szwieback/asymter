@@ -12,6 +12,7 @@ import copy
 import numpy as np
 import colorcet as cc
 import geopandas
+from string import ascii_lowercase
 
 from plotting import prepare_figure, path_figures
 from asymter import path_indices, read_gdal
@@ -31,7 +32,7 @@ ccrs3413 = ccrs.Stereographic(
 ocean_hr = cfeature.NaturalEarthFeature('physical', 'ocean', '50m')
 lakes_hr = cfeature.NaturalEarthFeature('physical', 'lakes', '50m')
 
-def gamma(val, exponent=0.80):#0.68
+def gamma(val, exponent=0.70):#0.80#0.68
     return np.sign(val) * np.abs(val) ** exponent
 
 # horrible hack to rotate image while avoiding explicit coordinate conversion
@@ -104,28 +105,19 @@ def maps(scenname='bandpass', index='logratio', maxse=0.06, fnout=None):
     ticks = [-0.4, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.4]
     ticklabels = ['-0.4', '', '-0.2', '-0.1', '0.0', '0.1', '0.2', '', '0.4']
     _draw_panel(
-        gamma(im), fig, axs[0, 0], circle, ccrsproj, cmap=cmap, vmax=gamma(0.4),
+        gamma(im), fig, axs[0, 0], circle, ccrsproj, cmap=cmap, vmax=gamma(ticks[-1]),
         label='asymmetry $a$ [-]', extent=extent, ticks=gamma(ticks), ticklabels=ticklabels)
 
     imse, _, _ = read_gdal(fnindexse)
     imse[np.logical_not(mask)] = np.nan
     cmap = copy.copy(cc.cm['CET_CBL1'])
     cmap.set_bad('#d0d0d0', 1.)
-    ticks = [0.0, 0.04, 0.08]
+    ticks = [0.0, 0.02, 0.04]
     gamma_ = lambda x: x
     _draw_panel(
-        gamma(imse), fig, axs[1, 0], circle, ccrsproj, cmap=cmap, vmin=gamma_(0.0),
-        vmax=gamma_(0.08), label='asymmetry standard error [-]', extent=extent,
+        gamma_(imse), fig, axs[0, 1], circle, ccrsproj, cmap=cmap, vmin=gamma_(ticks[0]),
+        vmax=gamma_(ticks[-1]), label='asymmetry standard error [-]', extent=extent,
         ticks=gamma_(ticks), ticklabels=ticks)
-
-    imT, _, _ = read_gdal(fnexplandict['temp'])
-    cmap = copy.copy(cc.cm['CET_CBL1'])
-    cmap.set_bad('#d0d0d0', 1.)
-    ticks = [-15, -10, -5, 0, 5]
-    _draw_panel(
-        imT, fig, axs[0, 1], circle, ccrsproj, cmap=cmap, vmin=-18, vmax=8,
-        label='temperature $T$ [$^{\\circ}\\mathrm{C}$]', extent=extent,
-        ticks=ticks, ticklabels=ticks)
 
     imr, _, _ = read_gdal(fnexplandict['ruggedness'])
     cmap = copy.copy(cc.cm['CET_CBL1'])
@@ -133,16 +125,31 @@ def maps(scenname='bandpass', index='logratio', maxse=0.06, fnout=None):
     cmap.set_bad('#d0d0d0', 1.)
     ticks = [30, 100, 300, 1000]
     _draw_panel(
-        rt(imr), fig, axs[1, 1], circle, ccrsproj, cmap=cmap, vmin=rt(20),
-        vmax=rt(2000), label='ruggedness $r$ [m]', extent=extent,
+        rt(imr), fig, axs[1, 0], circle, ccrsproj, cmap=cmap, vmin=rt(20),
+        vmax=rt(2000), label='relief $r$ [m]', extent=extent,
         ticks=rt(ticks), ticklabels=ticks)
+
+    imT, _, _ = read_gdal(fnexplandict['temp'])
+    cmap = copy.copy(cc.cm['CET_CBL1'])
+    cmap.set_bad('#d0d0d0', 1.)
+    ticks = [-15, -10, -5, 0, 5]
+    _draw_panel(
+        imT, fig, axs[1, 1], circle, ccrsproj, cmap=cmap, vmin=-18, vmax=8,
+        label='temperature $T$ [$^{\\circ}\\mathrm{C}$]', extent=extent,
+        ticks=ticks, ticklabels=ticks)
+
+
     ge = geopandas.read_file(fnexplandict['glacier'])
     gemask = ge.area > (35e3) ** 2
     ge_ = ge.loc[gemask]
-    for ax in (axs[1, 1],):
+    for ax in (axs[1, 0],):
         ax.add_geometries(
             ge_.geometry, crs=ccrs3413, edgecolor='#ffffff', facecolor='none', lw=1.0,
             alpha=1.0, zorder=5)
+    for jax, ax in enumerate(axs.flatten()):    
+        ax.text(
+            -0.10, 0.98, ascii_lowercase[jax]+')', transform=ax.transAxes, ha='left', 
+            va='baseline')
     if fnout is not None:
         fig.savefig(fnout, dpi=450)
 
@@ -244,9 +251,9 @@ def maps_processing(index0 = 'logratio', maxse=0.02, plot_baseline=True, fnout=N
 if __name__ == '__main__':
     # add: a, b, c, d
     # run with more slope options
-#     maps(fnout=os.path.join(path_figures, 'maps.pdf'))
+    maps(fnout=os.path.join(path_figures, 'maps.pdf'))
 #     wind_precip_plot(fnout=os.path.join(path_figures, 'mapwindprecip.pdf'))
-    maps_processing(
-        fnout=os.path.join(path_figures, 'maps_processing.pdf'), plot_baseline=True)
+#     maps_processing(
+#         fnout=os.path.join(path_figures, 'maps_processing.pdf'), plot_baseline=True)
 #     maps_processing(
 #         fnout=os.path.join(path_figures, 'maps_processing_EW.pdf'), index0='logratioEW')

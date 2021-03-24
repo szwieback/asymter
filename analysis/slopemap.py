@@ -18,7 +18,7 @@ def export_slopemap(tile, bp=(100, None)):
     save_geotiff(slope, fnout, geotransform=geotrans, proj=proj)
 
 if __name__ == '__main__':
-    tile = (70, 32)#(36, 26)#(47, 14)
+    tile = (53, 48)#(70, 32)#(36, 26)#(47, 14)
     export_slopemap(tile)
 
 
