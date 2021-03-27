@@ -10,7 +10,7 @@ from asymter import path_indices, read_gdal
 from paths import fnexplandict, path_explanatory
 
 maxse = 0.06
-gridsize = 129  # 513
+gridsize = 513  # 513
 gamma = 0.1
 logsdict = {
     'ruggedness': True, 'asym': False, 'temp': False, 'prec': True, 'soil': True,
@@ -190,7 +190,6 @@ def _plot_kd_column(
             0.5, 1.04, label, ha='center', va='baseline', transform=axs[0].transAxes)
     return mps
 
-
 def plot_kd_soil(fnout, scenname='bandpass'):
     import matplotlib.pyplot as plt
     from plotting import prepare_figure, path_figures
@@ -322,7 +321,7 @@ def plot_kd_small(fnout, scenname='bandpass', explan='ruggedness'):
     from string import ascii_lowercase
     pd = {
         'bgcol': ('#d0d0d0', '#d0d0d0'), 'cmap': (cc.cm['bwy'], cc.cm['CET_CBL1']),
-        'vmax': (0.07, 0.30), 'vmin': (-0.07, 0.00), 'ylim': (-17, 3),
+        'vmax': (0.07, 0.30), 'vmin': (-0.07, 0.00), 'ylim': (3, -17),
         'yticks': (-15, -10, -5, 0), 'cticks': ([-0.05, 0.0, 0.05], [0.0, 0.1, 0.2, 0.3])}
     index = 'logratio'
     cutoff = 0.02
@@ -335,7 +334,7 @@ def plot_kd_small(fnout, scenname='bandpass', explan='ruggedness'):
         left=0.070, right=0.913, bottom=0.125, top=0.945, wspace=0.2, hspace=0.2,
         remove_spines=False)
     if explan == 'ruggedness':
-        xticks, xlim = (100, 1000), (np.log10(40), np.log10(1000))#1.2, 3.0
+        xticks, xlim = (100, 1000), (np.log10(40), np.log10(1000))  # 1.2, 3.0
         xmticks = (40, 50, 60, 70, 80, 90, 200, 300, 400, 500, 600, 700, 800, 900, 1000)
         xlabel, xlabel_short = 'relief $r$ [m]', '$r$ [m]'
     elif explan == 'absslope':
@@ -400,7 +399,7 @@ def plot_kd_small(fnout, scenname='bandpass', explan='ruggedness'):
     bbox_ = {'facecolor': '#333333', 'edgecolor': 'none', 'boxstyle':'square,pad=0.12',
              'alpha': 0.9}
     for jax, ax in enumerate(axs.flatten(order='F')):
-        col = '#ffffff' if jax in (1, 3, 5, 7, 9, 11) else '#666666'
+        col = '#ffffff' if jax in (1, 5, 7, 9 , 11, 13) else '#666666'
         bbox = bbox_ if jax < 0 else None
         ax.text(
             0.04, 0.90, ascii_lowercase[jax] + ')', ha='left', va='baseline', color=col,

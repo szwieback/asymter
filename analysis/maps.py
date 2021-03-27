@@ -19,6 +19,14 @@ from asymter import path_indices, read_gdal
 from kd import read_mask
 from paths import fnexplandict
 
+locs = {
+    'Kolyma Uplands': (62.3, 150.5),
+    'Taymyr': (76.2, 103.0),
+    'Melville': (76.0, -116.2),
+    'Yukon': (65.0, -147.6),
+    'Chantrey': (67.0, -92.0),
+    }
+
 pc = ccrs.PlateCarree()
 # hack!
 ccrsproj = ccrs.Stereographic(
@@ -32,7 +40,7 @@ ccrs3413 = ccrs.Stereographic(
 ocean_hr = cfeature.NaturalEarthFeature('physical', 'ocean', '50m')
 lakes_hr = cfeature.NaturalEarthFeature('physical', 'lakes', '50m')
 
-def gamma(val, exponent=0.70):#0.80#0.68
+def gamma(val, exponent=0.70):  # 0.80#0.68
     return np.sign(val) * np.abs(val) ** exponent
 
 # horrible hack to rotate image while avoiding explicit coordinate conversion
@@ -107,7 +115,11 @@ def maps(scenname='bandpass', index='logratio', maxse=0.06, fnout=None):
     _draw_panel(
         gamma(im), fig, axs[0, 0], circle, ccrsproj, cmap=cmap, vmax=gamma(ticks[-1]),
         label='asymmetry $a$ [-]', extent=extent, ticks=gamma(ticks), ticklabels=ticklabels)
-
+    coords = (76.2, 103.0)
+    for locn, loccor in locs.items():
+        axs[0, 0].text(
+            loccor[1], loccor[0], locn[0],
+            ha='center', va='center', transform=ccrs.Geodetic())
     imse, _, _ = read_gdal(fnindexse)
     imse[np.logical_not(mask)] = np.nan
     cmap = copy.copy(cc.cm['CET_CBL1'])
@@ -138,7 +150,6 @@ def maps(scenname='bandpass', index='logratio', maxse=0.06, fnout=None):
         label='temperature $T$ [$^{\\circ}\\mathrm{C}$]', extent=extent,
         ticks=ticks, ticklabels=ticks)
 
-
     ge = geopandas.read_file(fnexplandict['glacier'])
     gemask = ge.area > (35e3) ** 2
     ge_ = ge.loc[gemask]
@@ -146,9 +157,9 @@ def maps(scenname='bandpass', index='logratio', maxse=0.06, fnout=None):
         ax.add_geometries(
             ge_.geometry, crs=ccrs3413, edgecolor='#ffffff', facecolor='none', lw=1.0,
             alpha=1.0, zorder=5)
-    for jax, ax in enumerate(axs.flatten()):    
+    for jax, ax in enumerate(axs.flatten()):
         ax.text(
-            -0.10, 0.98, ascii_lowercase[jax]+')', transform=ax.transAxes, ha='left', 
+            -0.10, 0.98, ascii_lowercase[jax] + ')', transform=ax.transAxes, ha='left',
             va='baseline')
     if fnout is not None:
         fig.savefig(fnout, dpi=450)
@@ -184,7 +195,7 @@ def wind_precip_plot(fnout=None):
     if fnout is not None:
         fig.savefig(fnout, dpi=450)
 
-def maps_processing(index0 = 'logratio', maxse=0.02, plot_baseline=True, fnout=None):
+def maps_processing(index0='logratio', maxse=0.02, plot_baseline=True, fnout=None):
     scenname = 'bandpass'
     def _read_scenname(scenname, index=index0):
         fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
@@ -232,7 +243,7 @@ def maps_processing(index0 = 'logratio', maxse=0.02, plot_baseline=True, fnout=N
     if plot_baseline:
         _draw_panel(
             gamma(im), fig, axs[0, 0], circle, ccrsproj, cmap=cmap, vmax=gamma(vmax),
-            label= 'baseline $a$ [-]', extent=extent, ticks=gamma(ticks), 
+            label='baseline $a$ [-]', extent=extent, ticks=gamma(ticks),
             ticklabels=ticklabels)
     else:
         ticks = [-15, -10, -5, 0, 5, 10, 15]

@@ -9,16 +9,17 @@ from asymter import read_adem_tile_buffer, slope_bp, save_geotiff, path0, inpain
 import os
 import numpy as np
 
-def export_slopemap(tile, bp=(100, None)):
+def export_slopemap(tile, bp=(100, None), set_zero=False):
     dem, proj, geotrans, _ = read_adem_tile_buffer(tile=tile)
     dem, mask_gap = inpaint_mask(dem, geotrans, bp=bp)
     slope = slope_bp(dem, proj, geotrans, bp=bp)
     slope[:, mask_gap] = np.nan
+    if set_zero:
+        slope[np.isnan(slope)] = 0
     fnout = os.path.join(path0, 'profiles', f'{tile[0]}_{tile[1]}_slope.tif')
     save_geotiff(slope, fnout, geotransform=geotrans, proj=proj)
 
 if __name__ == '__main__':
-    tile = (53, 48)#(70, 32)#(36, 26)#(47, 14)
-    export_slopemap(tile)
-
+    tile = (46, 8)  # (53, 48)#(70, 32)#(36, 26)#(47, 14)
+    export_slopemap(tile, set_zero=True)
 
