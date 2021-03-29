@@ -421,7 +421,7 @@ def plot_kd_temperature(fnout, scenname='bandpass'):
         gridsize=gridsize)
     print(pdf.shape)
     fig, ax = prepare_figure(
-        nrows=1, ncols=1, figsize=(6.268, 1.100), figsizeunit='in',
+        nrows=1, ncols=1, figsize=(6.270, 1.100), figsizeunit='in',
         left=0.0684, right=0.9980, bottom=0.2800, top=0.9900, wspace=0.2, hspace=0.2,
         remove_spines=False)  # left=0.064, figsize=6.71
     ax.set_facecolor('#d0d0d0')
@@ -436,7 +436,7 @@ def plot_kd_temperature(fnout, scenname='bandpass'):
 #     med = conditional_quantile(pdf, grid, quantile=0.5)
 #     ax.plot(grid[1], med, c='#cccccc', lw=0.5, alpha=0.5)
     ax.axhline(0, c='#666666', lw=0.5, alpha=0.5)
-    ax.set_ylim((-0.15, 0.15))
+    ax.set_ylim((-0.18, 0.18))#0.15
     ax.set_xlim((-17, 3))
     ax.set_xticks([-15, -10, -5, 0])
     ax.text(-0.073, 0.500, '$a$ [-]', rotation=90, va='center', transform=ax.transAxes)
@@ -474,11 +474,11 @@ if __name__ == '__main__':
 #     plot_kd(fnout='kde.pdf')
 #     plot_kd_regions(fnout='kderegions.pdf')
 #     plot_kd_soil(fnout='kdesoil.pdf')
-    plot_kd_small(fnout='kdesmall.pdf')
+#     plot_kd_small(fnout='kdesmall.pdf')
 #     plot_kd_small(fnout='kdesmall_slope.pdf', explan='absslope')
 #     for scenname in ['lowpass', 'bandpass002', 'bandpass008']:
 #         plot_kd_soil(fnout=f'kdesoil_{scenname}.pdf', scenname=scenname)
 #         plot_kd_small(fnout=f'kde_small_{scenname}.pdf', scenname=scenname)
-#     plot_kd_temperature('kdetemp.pdf')
+    plot_kd_temperature('kdetemp.pdf')
 #     interrogate_results()
 
