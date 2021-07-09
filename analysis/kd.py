@@ -197,8 +197,9 @@ def plot_kd_soil(fnout, scenname='bandpass'):
     from string import ascii_lowercase
     pd = {
         'bgcol': ('#d0d0d0', '#d0d0d0'), 'cmap': (cc.cm['bwy'], cc.cm['CET_CBL1']),
-        'vmax': (0.07, 0.3), 'vmin': (-0.07, 0.00), 'ylim': (-17, 3),
-        'yticks': (-15, -10, -5, 0), 'cticks': ([-0.05, 0.0, 0.05], [0.0, 0.1, 0.2, 0.3])}
+        'vmax': (0.07, 0.3), 'vmin': (-0.07, 0.00), 'ylim': (3,-17),
+        'yticks': (-15, -10, -5, 0), 'cticks': ([-0.05, 0.0, 0.05], [0.0, 0.1, 0.2, 0.3]),
+        'vlines': np.log10(np.array(modrrestrict))}
     index = 'logratio'
     cutoff = 0.02
     fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
@@ -208,9 +209,9 @@ def plot_kd_soil(fnout, scenname='bandpass'):
         nrows=2, ncols=2, figsize=(0.79, 0.82), sharex='col', sharey=True,
         left=0.175, right=0.785, bottom=0.125, top=0.945, wspace=0.2, hspace=0.2,
         remove_spines=False)
-    xticks = (30, 100, 1000)
-    xmticks = (40, 50, 60, 70, 80, 90, 200, 300, 400, 500, 600, 700, 800, 900)
-    pd_ = {'xlim': (1.2, 3.0), 'xticks': np.log10(xticks), 'xlabel': 'relief $r$ [m]',
+    xticks, xlim = (100, 1000), (np.log10(40), np.log10(1000))  # 1.2, 3.0
+    xmticks = (40, 50, 60, 70, 80, 90, 200, 300, 400, 500, 600, 700, 800, 900, 1000)
+    pd_ = {'xlim': xlim, 'xticks': np.log10(xticks), 'xlabel': 'relief $r$ [m]',
            'xticklabels': xticks, 'xminorticks': np.log10(xmticks)}
     _plot_kd_column(
         axs[:, 0], fnindex, fnexplandict, {**pd, **pd_}, explannames=('temp', 'ruggedness'),
@@ -245,7 +246,7 @@ def plot_kd_soil(fnout, scenname='bandpass'):
         ax.text(
             0.04, 0.90, ascii_lowercase[jax] + ')', ha='left', va='baseline', color=col,
             transform=ax.transAxes, bbox=bbox)
-    fig.savefig(os.path.join(path_figures, fnout))
+    fig.savefig(os.path.join(path_figures, fnout), dpi=600)
 
 def plot_kd_regions(fnout):
     import matplotlib.pyplot as plt
@@ -473,12 +474,12 @@ def interrogate_results():
 if __name__ == '__main__':
 #     plot_kd(fnout='kde.pdf')
 #     plot_kd_regions(fnout='kderegions.pdf')
-#     plot_kd_soil(fnout='kdesoil.pdf')
+    plot_kd_soil(fnout='kdesoil.pdf')
 #     plot_kd_small(fnout='kdesmall.pdf')
 #     plot_kd_small(fnout='kdesmall_slope.pdf', explan='absslope')
 #     for scenname in ['lowpass', 'bandpass002', 'bandpass008']:
 #         plot_kd_soil(fnout=f'kdesoil_{scenname}.pdf', scenname=scenname)
 #         plot_kd_small(fnout=f'kde_small_{scenname}.pdf', scenname=scenname)
-    plot_kd_temperature('kdetemp.pdf')
+#     plot_kd_temperature('kdetemp.pdf')
 #     interrogate_results()
 
