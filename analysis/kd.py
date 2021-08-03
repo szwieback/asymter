@@ -446,6 +446,42 @@ def plot_kd_temperature(fnout, scenname='bandpass'):
         va='baseline', transform=ax.transAxes)
     fig.savefig(os.path.join(path_figures, fnout))
 
+def plot_temperature(fnout, scenname='bandpass', gridsizemult=None):
+    import matplotlib.pyplot as plt
+    from plotting import prepare_figure, path_figures
+    if gridsizemult is not None:
+        gridsize_ = gridsizemult * gridsize - 1
+    else:
+        gridsize_ = gridsize 
+    index = 'logratio'
+    fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
+    fnindexse = os.path.join(path_indices, scenname, f'{scenname}_{index}_se.tif')
+    restrict = [('ruggedness', *modrrestrict)]
+    selimit = (fnindexse, maxse)
+    pdf, grid = joint_pdf(
+        fnindex, fnexplandict, explannames=('temp',), selimit=selimit, restrict=restrict,
+        gridsize=gridsize_)
+    print(pdf.shape)
+    fig, ax = prepare_figure(
+        nrows=1, ncols=1, figsize=(6.270, 1.100), figsizeunit='in',
+        left=0.073, right=0.9980, bottom=0.2800, top=0.9900, wspace=0.2, hspace=0.2,
+        remove_spines=False)  # left=0.064, figsize=6.71
+    octiles = [conditional_quantile(pdf, grid, quantile=0.125*jq) for jq in range(9)]
+    ax.axhline(0, c='#333333', lw=0.1, alpha=1.0)
+    ax.fill_between(grid[1], octiles[1], octiles[7], ec='none', fc='#a1b8d5', alpha=0.5)
+    ax.fill_between(grid[1], octiles[2], octiles[6], ec='none', fc='#648cba', alpha=0.5)
+    ax.fill_between(grid[1], octiles[3], octiles[5], ec='none', fc='#40628d', alpha=0.5)
+    ax.plot(grid[1], octiles[4], c='#092c55', lw=0.8, alpha=1.0)
+    ax.set_ylim((-0.1, 0.14))#0.15
+    ax.set_xlim((-17, 2))
+    ax.set_xticks([-15, -10, -5, 0])
+    ax.set_yticks([-0.05, 0.00, 0.05, 0.10])
+    ax.text(-0.078, 0.500, '$a$ [-]', rotation=90, va='center', transform=ax.transAxes)
+    ax.text(
+        0.47, -0.36, 'increasing temperature T [$^{\\circ}\\mathrm{C}$]', ha='center',
+        va='baseline', transform=ax.transAxes)
+    fig.savefig(os.path.join(path_figures, fnout))
+
 def interrogate_results():
     scenname, index = 'bandpass', 'logratio'
     fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
@@ -474,12 +510,14 @@ def interrogate_results():
 if __name__ == '__main__':
 #     plot_kd(fnout='kde.pdf')
 #     plot_kd_regions(fnout='kderegions.pdf')
-    plot_kd_soil(fnout='kdesoil.pdf')
+#     plot_kd_soil(fnout='kdesoil.pdf')
 #     plot_kd_small(fnout='kdesmall.pdf')
 #     plot_kd_small(fnout='kdesmall_slope.pdf', explan='absslope')
 #     for scenname in ['lowpass', 'bandpass002', 'bandpass008']:
 #         plot_kd_soil(fnout=f'kdesoil_{scenname}.pdf', scenname=scenname)
 #         plot_kd_small(fnout=f'kde_small_{scenname}.pdf', scenname=scenname)
 #     plot_kd_temperature('kdetemp.pdf')
+    plot_temperature('medtemp.pdf', gridsizemult=2)
+
 #     interrogate_results()
 
