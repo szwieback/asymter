@@ -7,7 +7,7 @@ import os
 import numpy as np
 
 from asymter import path0
-from plotting import prepare_figure, path_figures
+from analysis.plotting import prepare_figure, path_figures
 
 def _load_profile(pname):
     fn = os.path.join(path0, 'profiles', f'{pname}.csv')

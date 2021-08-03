@@ -12,7 +12,7 @@ if hostname == 'asf-simon':
 elif hostname == 'Vienna':
     path0 = '/10TBstorage/Work/asymter'
 else:
-    path0 = os.path.expanduser('~')
+    path0 = os.path.expanduser('~/asymter')
 
 path_adem = os.path.join(path0, 'ArcticDEM')
 path_wm = os.path.join(path0, 'watermask')

@@ -1,0 +1,12 @@
+# Required packages
+gdal
+numpy
+zlib
+requests
+
+### For higher-level analyses and plotting: 
+# matplotlib
+# colorcet
+# fastkde
+# cartopy
+# geopandas

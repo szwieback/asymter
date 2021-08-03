@@ -110,4 +110,3 @@ def download_all_adem_tiles(
     
 if __name__ == '__main__':
     download_all_adem_tiles()
-    pass

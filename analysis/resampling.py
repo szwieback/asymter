@@ -6,15 +6,13 @@ Created on Oct 19, 2020
 import os
 import numpy as np
 from collections import defaultdict
-import ogr
-import osr
 import subprocess
 
-from setup import setup_path
-setup_path()
+
 from asymter import (
-    path_explanatory, path_indices, resample_gdal, geospatial_from_file,
-    save_geotiff, read_gdal, proj_from_epsg)
+    path_indices, resample_gdal, geospatial_from_file, save_geotiff, read_gdal, 
+    proj_from_epsg)
+from analysis.paths import path_explanatory
 
 fnref = os.path.join(path_indices, 'raw', 'raw_ruggedness.tif')
 geospatial = geospatial_from_file(fnref)
@@ -22,7 +20,7 @@ geospatial = geospatial_from_file(fnref)
 modays = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
 
 def rasterize(fnpolygon, geospatial, attribute=None):
-    import gdal, gdalconst
+    from osgeo import gdal, gdalconst, ogr
     import tempfile
     dt_gdal = {'float32': gdalconst.GDT_Float32, 'uint8': gdalconst.GDT_Byte}
     gs = geospatial
@@ -91,7 +89,7 @@ def max_glacial_extent(fnout=None, fnoutvec=None):
     periods = ['30 ka', '35 ka', '40 ka', '45 ka', 'MIS 4', 'MIS 5a', 'MIS 5b',
                'MIS 5c', 'MIS 5d', 'MIS 6', 'MIS 8', 'MIS 10', 'MIS 12', 'MIS 16',
                'MIS 20-24']
-    import gdal
+    from osgeo import gdal, ogr, osr
     path0 = path_explanatory['glacier']
     def filename(period):
         folder_recons = defaultdict(lambda: 'hypothesised ice-sheet reconstructions')

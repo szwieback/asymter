@@ -6,7 +6,6 @@ Created on Oct 23, 2020
 import os
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-import matplotlib.pyplot as plt
 import matplotlib.path as mpath
 import copy
 import numpy as np
@@ -14,10 +13,10 @@ import colorcet as cc
 import geopandas
 from string import ascii_lowercase
 
-from plotting import prepare_figure, path_figures
+from analysis.plotting import prepare_figure
 from asymter import path_indices, read_gdal
-from kd import read_mask
-from paths import fnexplandict
+from analysis.kd import read_mask
+from analysis.paths import fnexplandict
 
 locs = {
     'Kolyma Uplands': (62.3, 150.5),
@@ -116,7 +115,6 @@ def maps(scenname='bandpass', index='logratio', maxse=0.06, fnout=None):
     _draw_panel(
         gamma(im), fig, axs[0, 0], circle, ccrsproj, cmap=cmap, vmax=gamma(ticks[-1]),
         label='asymmetry $a$ [-]', extent=extent, ticks=gamma(ticks), ticklabels=ticklabels)
-    coords = (76.2, 103.0)
     for locn, loccor in locs.items():
         axs[0, 0].text(
             loccor[1], loccor[0], locn[0],

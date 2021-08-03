@@ -7,7 +7,7 @@ import os
 import numpy as np
 
 from asymter import path_indices, read_gdal
-from paths import fnexplandict, path_explanatory
+from analysis.paths import fnexplandict
 
 maxse = 0.06
 gridsize = 513  # 513
@@ -133,8 +133,7 @@ def plot_median_relief_temp(pdf, grid, cutoff=0.05):
     cmap = cc.cm['bwy']
     vmax = 0.07
     medianasym = conditional_quantile(pdf, grid, cutoff=cutoff)
-    # iqrasym = conditional_iqr(pdf, grid, cutoff=cutoff)
-    fig, ax = plt.subplots()
+    _, ax = plt.subplots()
     ax.set_facecolor('#dddddd')
     ax.pcolormesh(
         grid[2], grid[1], medianasym, vmin=-vmax, vmax=vmax, cmap=cmap, shading='auto')
@@ -191,8 +190,7 @@ def _plot_kd_column(
     return mps
 
 def plot_kd_soil(fnout, scenname='bandpass'):
-    import matplotlib.pyplot as plt
-    from plotting import prepare_figure, path_figures
+    from analysis.plotting import prepare_figure, path_figures
     import colorcet as cc
     from string import ascii_lowercase
     pd = {
@@ -232,14 +230,12 @@ def plot_kd_soil(fnout, scenname='bandpass'):
         _y = (0.5 * (pos.y0 + pos.y1) - 0.5 * cbpos['dy'] - cbpos['y'])
         rect_cax = (pos.x1 + cbpos['x'], _y, cbpos['dx'], cbpos['dy'])
         cax = fig.add_axes(rect_cax)
-        cbar = fig.colorbar(
+        fig.colorbar(
             mps[jax], cax=cax, orientation='vertical', ticklocation='left',
             ticks=pd['cticks'][jax])
         ax.text(
             1.40, 0.90, clabels[jax], ha='center', va='baseline', transform=ax.transAxes,
             color='#000000')
-    bbox_ = {'facecolor': '#333333', 'edgecolor': 'none', 'boxstyle':'square,pad=0.12',
-             'alpha': 0.9}
     for jax, ax in enumerate(axs.flatten(order='F')):
         col = '#ffffff' if jax in (3,) else '#666666'
         bbox = None
@@ -249,8 +245,7 @@ def plot_kd_soil(fnout, scenname='bandpass'):
     fig.savefig(os.path.join(path_figures, fnout), dpi=600)
 
 def plot_kd_regions(fnout):
-    import matplotlib.pyplot as plt
-    from plotting import prepare_figure, path_figures
+    from analysis.plotting import prepare_figure, path_figures
     import colorcet as cc
     from string import ascii_lowercase
     pd = {
@@ -298,7 +293,7 @@ def plot_kd_regions(fnout):
         _y = (0.5 * (pos.y0 + pos.y1) - 0.5 * cbpos['dy'] - cbpos['y'])
         rect_cax = (pos.x1 + cbpos['x'], _y, cbpos['dx'], cbpos['dy'])
         cax = fig.add_axes(rect_cax)
-        cbar = fig.colorbar(
+        fig.colorbar(
             mps[jax], cax=cax, orientation='vertical', ticklocation='left',
             ticks=pd['cticks'][jax])
         ax.text(
@@ -316,8 +311,7 @@ def plot_kd_regions(fnout):
 #     plt.show()
 
 def plot_kd_small(fnout, scenname='bandpass', explan='ruggedness'):
-    import matplotlib.pyplot as plt
-    from plotting import prepare_figure, path_figures
+    from analysis.plotting import prepare_figure, path_figures
     import colorcet as cc
     from string import ascii_lowercase
     pd = {
@@ -391,7 +385,7 @@ def plot_kd_small(fnout, scenname='bandpass', explan='ruggedness'):
         _y = (0.5 * (pos.y0 + pos.y1) - 0.5 * cbpos['dy'] - cbpos['y'])
         rect_cax = (pos.x1 + cbpos['x'], _y, cbpos['dx'], cbpos['dy'])
         cax = fig.add_axes(rect_cax)
-        cbar = fig.colorbar(
+        fig.colorbar(
             mps[jax], cax=cax, orientation='vertical', ticklocation='left',
             ticks=pd['cticks'][jax])
         ax.text(
@@ -408,9 +402,8 @@ def plot_kd_small(fnout, scenname='bandpass', explan='ruggedness'):
     fig.savefig(os.path.join(path_figures, fnout))
 
 def plot_kd_temperature(fnout, scenname='bandpass'):
-    import matplotlib.pyplot as plt
     import colorcet as cc
-    from plotting import prepare_figure, path_figures
+    from analysis.plotting import prepare_figure, path_figures
     index = 'logratio'
     cutoff = 0.05
     fnindex = os.path.join(path_indices, scenname, f'{scenname}_{index}.tif')
@@ -447,8 +440,7 @@ def plot_kd_temperature(fnout, scenname='bandpass'):
     fig.savefig(os.path.join(path_figures, fnout))
 
 def plot_temperature(fnout, scenname='bandpass', gridsizemult=None):
-    import matplotlib.pyplot as plt
-    from plotting import prepare_figure, path_figures
+    from analysis.plotting import prepare_figure, path_figures
     if gridsizemult is not None:
         gridsize_ = gridsizemult * gridsize - 1
     else:
@@ -490,7 +482,7 @@ def interrogate_results():
     im, _, _ = read_gdal(fnindex)
     mask = read_mask(fnexplandict=fnexplandict, selimit=selimit)
     valid = np.logical_and(np.isfinite(im), mask)
-    a = im[valid].flatten()
+#     a = im[valid].flatten()
 #     print(np.count_nonzero(np.abs(a) < 0.04) / len(a))
 #     print(np.count_nonzero(a > 0.04) / np.count_nonzero(np.abs(a) > 0.04))
 #     print(np.count_nonzero(a > 0.1) / np.count_nonzero(np.abs(a) > 0.1))

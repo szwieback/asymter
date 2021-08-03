@@ -3,8 +3,7 @@ Created on Sep 28, 2020
 
 @author: simon
 '''
-from setup import setup_path
-setup_path()
+
 from asymter import batch_asymter
 
 if __name__ == '__main__':
